@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Curated package-visibility list (ADR-0004).
+
+  We deliberately do NOT declare QUERY_ALL_PACKAGES: it is a Play restricted permission,
+  integrity scanning is not a dependable justification for it, and it is far more personal
+  data than any decision here needs. Each entry below maps to an ENV_* signal documented in
+  docs/DETECTION_CATALOG.md.
+
+  Where visibility is filtered, the affected signals report INCONCLUSIVE and the report
+  carries META_VISIBILITY_RESTRICTED. "Not found" is never reported as "clean".
+
+  Integrators who prefer to curate their own list can drop this fragment with:
+      <queries tools:node="remove" />
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <!-- Root managers — ENV_HOOK_MANAGER_APP / ROOT_MANAGER_PACKAGE -->
+        <package android:name="com.topjohnwu.magisk" />
+        <package android:name="me.weishu.kernelsu" />
+        <package android:name="eu.chainfire.supersu" />
+        <package android:name="com.koushikdutta.superuser" />
+        <package android:name="com.noshufou.android.su" />
+
+        <!-- Hooking frameworks — ENV_HOOK_MANAGER_APP -->
+        <package android:name="de.robv.android.xposed.installer" />
+        <package android:name="org.meowcat.edxposed.manager" />
+        <package android:name="org.lsposed.manager" />
+        <package android:name="io.va.exposed" />
+
+        <!-- APK patchers — ENV_PATCHER_APP -->
+        <package android:name="com.chelpus.lackypatch" />
+        <package android:name="com.dimonvideo.luckypatcher" />
+        <package android:name="com.forpda.lp" />
+        <package android:name="com.android.vending.billing.InAppBillingService.LUCK" />
+
+        <!-- Memory editors — ENV_MEMORY_EDITOR -->
+        <package android:name="com.catch_.me_.if_.you_.can_" />
+        <package android:name="org.sbtools.gamehack" />
+        <package android:name="cn.mm.gk" />
+
+        <!-- MITM / traffic interception — ENV_MITM_PROXY_APP -->
+        <package android:name="com.guoshi.httpcanary" />
+        <package android:name="com.guoshi.httpcanary.premium" />
+        <package android:name="app.greyshirts.sslcapture" />
+        <package android:name="com.minhui.networkcapture" />
+        <package android:name="com.emanuelef.remote_capture" />
+
+        <!-- Cloners / virtual spaces — ENV_CLONER_APP -->
+        <package android:name="com.lbe.parallel.intl" />
+        <package android:name="com.ludashi.superboost" />
+        <package android:name="com.applisto.appcloner" />
+        <package android:name="com.oasisfeng.island" />
+        <package android:name="net.typeblog.shelter" />
+    </queries>
+
+</manifest>

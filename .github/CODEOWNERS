@@ -1,0 +1,9 @@
+# Default owners
+*                           @ankitgoenk
+
+# Anything that changes the security posture needs a second look
+/docs/THREAT_MODEL.md       @ankitgoenk
+/docs/DETECTION_CATALOG.md  @ankitgoenk
+/docs/ANTI_TAMPER.md        @ankitgoenk
+/docs/adr/                  @ankitgoenk
+/integrity-native/          @ankitgoenk

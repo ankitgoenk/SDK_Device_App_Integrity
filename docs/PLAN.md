@@ -34,7 +34,7 @@ These block Phase 1. Answer them, record each as an ADR in [`adr/`](adr/).
 Estimates assume one experienced Android engineer, with ~0.5 engineer of native/security
 support from Phase 3. Phases 2–6 are largely parallelisable across two engineers.
 
-### Phase 0 — Repository scaffold *(3–5 days)*
+### Phase 0 — Repository scaffold *(3–5 days)* — **DONE**
 - Gradle multi-module skeleton exactly as in [ARCHITECTURE.md](ARCHITECTURE.md#module-layout).
 - `sample-app` (a deliberately boring app that renders a live report) and `sample-backend`
   stub for verification.
@@ -42,6 +42,20 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
   Android Lint, `connectedAndroidTest` on a Gradle-managed emulator device.
 - `SessionStart`/dev-container setup so the build works from a clean clone.
 - **Exit:** `./gradlew build` green in CI; sample app installs and shows an empty report.
+
+> **Status.** All scaffold artefacts are committed and the pure-JVM half is verified: every
+> Kotlin source type-checks under explicit-API-strict with warnings-as-errors, and the
+> `integrity-core` unit tests pass. The Gradle *build* itself is unverified, because the
+> session it was authored in could not reach `dl.google.com` (AGP, AndroidX, Compose and the
+> Android SDK installer all live there), so AGP never resolved. First run on a machine with
+> normal egress:
+>
+> ```bash
+> ./gradlew apiDump    # bcv has no committed api/*.api yet, so apiCheck fails until this runs
+> ./gradlew build detekt ktlintCheck apiCheck
+> ```
+>
+> Expect to fix a version-catalog pin or two on that first run.
 
 ### Phase 1 — Core engine and public API *(1–2 weeks)*
 - Data model: `Signal`, `SignalId`, `Category`, `Confidence`, `Evidence`, `IntegrityReport`,
@@ -173,11 +187,16 @@ with 3).
 ## 3. Work breakdown checklist
 
 ### Phase 0
-- [ ] `settings.gradle.kts` with all modules; version catalog (`gradle/libs.versions.toml`)
-- [ ] Convention plugins (`build-logic/`) for android-library and native modules
-- [ ] `sample-app` with a report screen
-- [ ] CI workflow: build, unit test, lint, detekt, API dump check, instrumented smoke test
-- [ ] `CODEOWNERS`, PR template, issue templates
+- [x] `settings.gradle.kts` with all modules; version catalog (`gradle/libs.versions.toml`)
+- [x] Convention plugins (`build-logic/`) for android-library, application and JVM modules
+- [x] `sample-app` with a report screen
+- [x] CI workflow: build, unit test, lint, detekt, ktlint, API check, catalog check, instrumented smoke test
+- [x] `CODEOWNERS`, PR template
+- [x] `tools/check-signal-catalog.py` — CI gate tying every `SignalId` to a catalog row
+- [x] `tools/setup-dev-env.sh` + `SessionStart` hook for clean-clone/web sessions
+- [ ] `./gradlew build` verified green (blocked in the authoring session: `dl.google.com` denied)
+- [ ] `./gradlew apiDump` to seed the committed API surface
+- [ ] Issue templates
 
 ### Phase 1
 - [ ] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`

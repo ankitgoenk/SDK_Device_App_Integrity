@@ -13,8 +13,9 @@ A modular, Kotlin-first Android SDK that answers two questions for the host app 
 The SDK produces an **evidence-based report**, not a boolean. The host app — and ideally the
 host's **backend** — decides what to do with it.
 
-> **Status:** design phase. This repository currently contains the plan and specifications.
-> No production code has been written yet. Start with [`docs/PLAN.md`](docs/PLAN.md).
+> **Status:** phase 0 complete — the multi-module scaffold, public API skeleton, quality
+> gates and CI are in place. Detectors land in phases 2–7 and every `evaluate()` currently
+> returns `UNKNOWN`. Start with [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 
@@ -80,6 +81,34 @@ lifecycleScope.launch {
     if (fresh.verdict == Verdict.COMPROMISED) escalateToBackend(fresh.signedPayload)
 }
 ```
+
+## Building
+
+```bash
+./gradlew build                 # assemble + unit tests + lint
+./gradlew detekt ktlintCheck    # static analysis
+./gradlew apiCheck              # public API surface is contract (apiDump to regenerate)
+tools/check-signal-catalog.py   # every SignalId must be documented in the catalog
+```
+
+Requires JDK 17+ and an Android SDK (`compileSdk 35`). `tools/setup-dev-env.sh` reports what
+is missing; it also runs automatically as a `SessionStart` hook in Claude Code sessions.
+
+The NDK is only needed from phase 3, so `:integrity-native` is excluded from the build until
+you set `integrity.enableNative=true`.
+
+### Modules
+
+| Module | Purpose |
+| --- | --- |
+| `integrity-core` | Public API, data model, engine, scoring. No detectors |
+| `integrity-native` | C++ core: `/proc` scanning, code-integrity checks, string vault (phase 3) |
+| `integrity-detector-{root,hooking,app,environment,emulator}` | Signal families, one module each |
+| `integrity-attestation-play` | Play Integrity wrapper (phase 7) |
+| `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
+| `integrity-testing` | Fakes and fixtures for detector tests |
+| `sample-app` | Renders a live report |
+| `sample-backend` | Nonce issuance and report verification (phase 7) |
 
 ## Licence
 
