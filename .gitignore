@@ -1,0 +1,25 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.aar
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Native
+obj/
+libs/
+
+# Secrets — never commit signing pins or backend keys
+secrets.properties
+signing.properties
