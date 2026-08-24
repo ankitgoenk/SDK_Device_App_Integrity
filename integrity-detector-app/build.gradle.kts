@@ -1,5 +1,5 @@
 plugins {
-    id("integrity.android.library")
+    id("integrity.android.library.published")
 }
 
 android {
