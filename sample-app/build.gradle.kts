@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":integrity-detector-app"))
     implementation(project(":integrity-detector-environment"))
     implementation(project(":integrity-detector-emulator"))
+    implementation(project(":integrity-native"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

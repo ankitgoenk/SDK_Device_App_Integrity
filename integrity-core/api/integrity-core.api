@@ -188,11 +188,14 @@ public final class io/integrity/core/SignalId {
 
 public final class io/integrity/core/SignalId$Companion {
 	public final fun getAPP_DEX_DIGEST_MISMATCH-isIsmlw ()Ljava/lang/String;
+	public final fun getAPP_NATIVE_LIB_MISMATCH-isIsmlw ()Ljava/lang/String;
 	public final fun getAPP_SIGNATURE_MISMATCH-isIsmlw ()Ljava/lang/String;
 	public final fun getATT_APP_NOT_RECOGNISED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_CONFIG_INVALID-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_ERROR-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_TIMEOUT-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_NATIVE_FAILED-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_NATIVE_NOT_CONFIGURED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_NATIVE_UNAVAILABLE-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_DANGEROUS_PROPS-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;

@@ -31,6 +31,27 @@ class AarConsumerTest {
         assertTrue(IntegrityGuard.isInitialized())
     }
 
+    /**
+     * The native library has to arrive inside a published AAR and load in an unrelated
+     * application. If it did not, this reports META_NATIVE_UNAVAILABLE instead of nothing.
+     */
+    @Test
+    fun theNativeLibraryLoadsFromThePublishedAar() = runBlocking {
+        val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
+
+        val nativeProblems = report.signals.filter {
+            it.id == SignalId.META_NATIVE_UNAVAILABLE ||
+                it.id == SignalId.META_NATIVE_FAILED ||
+                it.id == SignalId.APP_NATIVE_LIB_MISMATCH
+        }
+
+        assertTrue(
+            "native core did not load cleanly from the AAR: " +
+                nativeProblems.joinToString { "${it.id}${it.evidence}" },
+            nativeProblems.isEmpty()
+        )
+    }
+
     @Test
     fun evaluateAnswersAcrossTheAarBoundary() = runBlocking {
         val report = IntegrityGuard.evaluate(Depth.FULL, force = true)

@@ -49,6 +49,7 @@ dependencies {
     implementation("io.integrity.sdk:integrity-core:$sdkVersion")
     implementation("io.integrity.sdk:integrity-detector-environment:$sdkVersion")
     implementation("io.integrity.sdk:integrity-detector-root:$sdkVersion")
+    implementation("io.integrity.sdk:integrity-native:$sdkVersion")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
 

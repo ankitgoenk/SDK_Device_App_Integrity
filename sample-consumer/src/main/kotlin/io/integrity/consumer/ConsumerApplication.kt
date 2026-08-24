@@ -5,6 +5,7 @@ import io.integrity.core.IntegrityConfig
 import io.integrity.core.IntegrityGuard
 import io.integrity.detector.environment.EnvironmentDetectors
 import io.integrity.detector.root.RootDetectors
+import io.integrity.nativecore.NativeDetectors
 
 /**
  * Stands in for a real integrator: depends on published AARs and follows the
@@ -19,7 +20,7 @@ class ConsumerApplication : Application() {
             this,
             IntegrityConfig.Builder()
                 .expectedPackageName(packageName)
-                .detectors(RootDetectors.all() + EnvironmentDetectors.all())
+                .detectors(RootDetectors.all() + EnvironmentDetectors.all() + NativeDetectors.all())
                 .build()
         )
     }

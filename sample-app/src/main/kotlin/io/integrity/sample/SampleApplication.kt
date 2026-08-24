@@ -11,6 +11,7 @@ import io.integrity.detector.emulator.EmulatorDetectors
 import io.integrity.detector.environment.EnvironmentDetectors
 import io.integrity.detector.hooking.HookDetectors
 import io.integrity.detector.root.RootDetectors
+import io.integrity.nativecore.NativeDetectors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +34,7 @@ class SampleApplication : Application() {
                         AppDetectors.all() +
                         EnvironmentDetectors.all() +
                         EmulatorDetectors.all() +
+                        NativeDetectors.all() +
                         HostDetector()
                 )
                 .policy(Policy.observability())

@@ -116,6 +116,8 @@ properties, SELinux state, verified-boot state, mount-table anomalies, and nativ
 
 ### Phase 3a — Native walking skeleton *(2–3 days)* — **do this before any detection code**
 
+> **Status:** implemented; awaiting the first CI run with the NDK.
+
 The temptation is to open `integrity-native` and write four thousand lines of anti-Frida
 machinery before finding out whether the `.so` even loads on a consumer's device. This
 phase exists to stop that. It ships **one trivial native function** and proves the whole

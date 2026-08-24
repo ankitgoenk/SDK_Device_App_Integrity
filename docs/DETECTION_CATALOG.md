@@ -65,7 +65,7 @@ never renamed. CI enforces that every `SignalId` in code has an entry here.
 | `APP_PACKAGE_MISMATCH` | `context.packageName` vs. compiled-in expected name | JVM+NAT | H | low | Catches renamed clones |
 | `APP_INSTALLER_UNEXPECTED` | `getInstallSourceInfo().installingPackageName` not in the allowed set (`com.android.vending`, enterprise MDM, …) | JVM | L | high | Sideloading is legitimate in many markets — informational unless the product is Play-only |
 | `APP_DEX_DIGEST_MISMATCH` | Digest each `classes*.dex` entry in the running APK against baselines injected at build time by `integrity-baseline-plugin` | NAT | H | low | Handles split APKs by digesting every loaded source; a re-signed patched APK fails this |
-| `APP_NATIVE_LIB_MISMATCH` | Digest the SDK's own `.so` files and verify they load from the app's lib dir | NAT | H | low | Detects `.so` swap |
+| `APP_NATIVE_LIB_MISMATCH` | Phase 3a: the loaded `.so` reports a build token that does not match this build of the SDK. Phase 4 strengthens this to a digest of the library against a build-time baseline | NAT | H (ships `I`) | low | Bypass: a substituted library that reports the correct token passes until the phase-4 digest baseline lands, and an attacker who simply deletes the `.so` produces `META_NATIVE_UNAVAILABLE` instead — deliberately weaker, because deletion cannot be told apart from a missing ABI. FP: none known for the token check itself; it compares two values the build controls |
 | `APP_UNEXPECTED_DEX` | `DexPathList` / classloader inspection and maps scan for `.dex`/`.oat`/`.vdex` loaded from `/data/local/tmp`, `/sdcard`, or another package's dir | NAT | H | med | Some legitimate SDKs load DEX dynamically — allowlist |
 | `APP_DEBUGGABLE_FLAG` | `ApplicationInfo.FLAG_DEBUGGABLE` set in a release build | JVM | H | low | Set by repackagers to attach a debugger |
 | `APP_RESOURCE_TAMPER` | Digest of critical assets (pinned certificates, config, keys) | JVM | M | low | Scope to a small, declared asset list — hashing everything is slow |
@@ -128,7 +128,9 @@ never renamed. CI enforces that every `SignalId` in code has an entry here.
 | --- | --- |
 | `META_DETECTOR_TIMEOUT` | A detector exceeded its budget — evidence lost, possibly deliberate |
 | `META_DETECTOR_ERROR` | A detector threw; includes the exception class only |
-| `META_NATIVE_UNAVAILABLE` | Native library failed to load or its self-check failed — **high suspicion**, since removing the `.so` is a common bypass |
+| `META_NATIVE_NOT_CONFIGURED` | The host did not ask for the native core, so its absence is a configuration fact, not a finding |
+| `META_NATIVE_UNAVAILABLE` | The native core was expected but would not load. Indistinguishable from a missing ABI or a packaging problem, so it is `INCONCLUSIVE` and unweighted — treating it as suspicion reports the SDK's own fragility as a compromised device |
+| `META_NATIVE_FAILED` | The native core loaded but a call into it failed. Contained at the JNI boundary; never propagated to the host |
 | `META_VISIBILITY_RESTRICTED` | Package visibility denied, so `ENV_*` results are incomplete |
 | `META_CONFIG_INVALID` | Host misconfiguration (e.g. no signing pin supplied) |
 
