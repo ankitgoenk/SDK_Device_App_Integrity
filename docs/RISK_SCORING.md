@@ -46,7 +46,14 @@ category cannot be inflated by piling on correlated low-value signals.
 
 ### Escalation rules (override the weighted average)
 
-These express "some things are decisive regardless of the arithmetic":
+These express "some things are decisive regardless of the arithmetic".
+
+**An escalation never outranks the weight.** A signal still shipping at `INFORMATIONAL`
+cannot fire an escalation, even when an escalation rule names it. Without that gate,
+hard rule 6 — new signals ship `INFORMATIONAL` until shadow-mode data justifies promotion —
+would be a fiction for any signal a rule happens to mention: it could force `COMPROMISED`
+before anyone had seen its false-positive rate. Promoting the weight (for example
+`AppDetectors.proposedWeights(policy)`) is what arms the escalation.
 
 | Rule | Effect |
 | --- | --- |

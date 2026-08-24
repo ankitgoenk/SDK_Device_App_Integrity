@@ -2,8 +2,10 @@ package io.integrity.sample
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.Category
+import io.integrity.core.Confidence
 import io.integrity.core.Depth
 import io.integrity.core.IntegrityGuard
+import io.integrity.core.SignalId
 import io.integrity.core.Verdict
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -66,9 +68,32 @@ class IntegrityGuardSmokeTest {
     fun everySignalBelongsToARegisteredCategory() = runBlocking {
         val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
 
+        val registered = setOf(Category.ROOT, Category.APP_TAMPER, Category.META)
         report.signals.forEach { signal ->
-            assertTrue(signal.category == Category.ROOT || signal.category == Category.META)
+            assertTrue("unexpected category ${signal.category}", signal.category in registered)
         }
+    }
+
+    /**
+     * The sample deliberately configures no signing pin, so the signature detector cannot
+     * reach a conclusion. It must say so rather than stay silent: silence would be
+     * indistinguishable from "this APK is correctly signed".
+     */
+    @Test
+    fun anUnconfiguredSignatureCheckReportsInconclusiveRatherThanClean() = runBlocking {
+        val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
+
+        val signature = report.signals.single { it.id == SignalId.APP_SIGNATURE_MISMATCH }
+        assertEquals(Confidence.INCONCLUSIVE, signature.confidence)
+        assertEquals("no_pin_configured", signature.evidence["reason"])
+    }
+
+    /** Coverage must stay honest: inconclusive detectors are not counted as covered. */
+    @Test
+    fun coverageReflectsOnlyDetectorsThatReachedAConclusion() = runBlocking {
+        val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
+
+        assertTrue("coverage should be below 1 while some detectors are inconclusive", report.coverage < 1f)
     }
 
     @Test

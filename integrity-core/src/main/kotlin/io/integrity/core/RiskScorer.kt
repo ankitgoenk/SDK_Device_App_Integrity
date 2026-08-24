@@ -68,14 +68,21 @@ internal class RiskScorer(private val policy: Policy) {
     private fun escalate(base: Verdict, signals: List<Signal>, categoryScores: Map<Category, Int>): Verdict {
         var verdict = base
 
+        // An escalation rule may never outrank the weight. A signal still shipping at
+        // INFORMATIONAL has not been validated against real-world data, so it must not be
+        // able to force a verdict through a side door — otherwise hard rule 6 would be a
+        // fiction for every signal an escalation rule happens to name. Promoting the
+        // weight (e.g. AppDetectors.proposedWeights) is what arms the escalation.
+        val promoted = { signal: Signal -> policy.weightOf(signal.id) != Weight.INFORMATIONAL }
+
         // Anything confirmed in the hooking family means the process is already owned.
         val confirmedHooking = signals.any {
-            it.category == Category.HOOKING && it.confidence == Confidence.CONFIRMED
+            it.category == Category.HOOKING && it.confidence == Confidence.CONFIRMED && promoted(it)
         }
         if (confirmedHooking) verdict = verdict.atLeast(Verdict.COMPROMISED)
 
         val decisive = signals.any {
-            it.confidence == Confidence.CONFIRMED && it.id in DECISIVE_SIGNALS
+            it.confidence == Confidence.CONFIRMED && it.id in DECISIVE_SIGNALS && promoted(it)
         }
         if (decisive) verdict = verdict.atLeast(Verdict.COMPROMISED)
 
