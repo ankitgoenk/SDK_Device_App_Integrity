@@ -35,7 +35,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew detekt ktlintCheck --stacktrace
+      - run: ./gradlew detekt ktlintCheck
 
   api:
     name: Public API compatibility
@@ -49,7 +49,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # Fails when the committed api/*.api dumps no longer match the source.
       # Regenerate deliberately with ./gradlew apiDump and review the diff.
-      - run: ./gradlew apiCheck --stacktrace
+      - run: ./gradlew apiCheck
 
   build:
     name: Build and unit test
@@ -62,7 +62,7 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew assemble testDebugUnitTest test lint --stacktrace
+      - run: ./gradlew assemble testDebugUnitTest test lint
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -93,7 +93,7 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis
-          script: ./gradlew connectedDebugAndroidTest --stacktrace
+          script: ./gradlew connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

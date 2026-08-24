@@ -6,7 +6,7 @@
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.IntegritySample">
 
         <activity
             android:name=".ReportActivity"
