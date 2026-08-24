@@ -111,13 +111,36 @@ class RiskScorerTest {
     }
 
     @Test
-    fun `a missing native library is suspicious with a score floor`() {
+    fun `a promoted missing native library is suspicious with a score floor`() {
         val result = score(
-            listOf(Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED))
+            listOf(Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED)),
+            policy = Policy.balanced().withWeight(SignalId.META_NATIVE_UNAVAILABLE, Weight.HIGH)
         )
 
         assertThat(result.verdict).isEqualTo(Verdict.SUSPICIOUS)
         assertThat(result.riskScore).isAtLeast(50)
+    }
+
+    @Test
+    fun `an unpromoted missing native library cannot move the score through the floor`() {
+        // A floor is an escalation wearing a number. Gating escalate() but not the floor
+        // left the same bypass open, which is how this slipped through once already.
+        val result = score(
+            listOf(Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED)),
+            policy = Policy.balanced()
+        )
+
+        assertThat(result.riskScore).isEqualTo(0)
+        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+    }
+
+    @Test
+    fun `the default policy ships no weights at all`() {
+        val policy = Policy.balanced()
+
+        assertThat(policy.weightOf(SignalId.META_NATIVE_UNAVAILABLE)).isEqualTo(Weight.INFORMATIONAL)
+        assertThat(policy.weightOf(SignalId.APP_SIGNATURE_MISMATCH)).isEqualTo(Weight.INFORMATIONAL)
+        assertThat(policy.weightOf(SignalId.ROOT_SU_BINARY)).isEqualTo(Weight.INFORMATIONAL)
     }
 
     @Test

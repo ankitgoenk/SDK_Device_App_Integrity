@@ -71,13 +71,20 @@ public class Policy private constructor(
          * theirs alongside the detector, per the definition of done in CONTRIBUTING.md.
          * Anything absent scores as INFORMATIONAL.
          */
-        private val BASE_WEIGHTS: Map<SignalId, Weight> = mapOf(
-            // Removing the native library is the cheapest bypass there is, so its absence
-            // must cost something rather than being silently treated as "clean".
-            // This is a statement about the SDK's own integrity rather than a device
-            // observation, so hard rule 6 (new signals ship INFORMATIONAL) does not apply.
-            SignalId.META_NATIVE_UNAVAILABLE to Weight.HIGH
-        )
+        /**
+         * Deliberately empty.
+         *
+         * A weight configured before its producer exists is a landmine: it does nothing
+         * until the detector ships, then activates silently. That has now happened twice —
+         * APP_SIGNATURE_MISMATCH and META_NATIVE_UNAVAILABLE — so the default policy no
+         * longer carries any weight at all, and `tools/check-signal-catalog.py` fails the
+         * build if one reappears without a producer.
+         *
+         * META_NATIVE_UNAVAILABLE in particular must not be weighted until phase 3a has
+         * measured how often a .so genuinely fails to load on real devices. Until then it
+         * would report the SDK's own robustness problem as a device-integrity finding.
+         */
+        private val BASE_WEIGHTS: Map<SignalId, Weight> = emptyMap()
 
         /** Sensible defaults for most apps. */
         @JvmStatic
