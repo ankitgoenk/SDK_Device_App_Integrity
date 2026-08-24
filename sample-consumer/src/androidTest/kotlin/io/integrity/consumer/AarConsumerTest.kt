@@ -3,6 +3,7 @@ package io.integrity.consumer
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.Depth
 import io.integrity.core.IntegrityGuard
+import io.integrity.core.SignalId
 import io.integrity.core.Verdict
 import io.integrity.detector.environment.EnvironmentDetectors
 import io.integrity.detector.root.RootDetectors
