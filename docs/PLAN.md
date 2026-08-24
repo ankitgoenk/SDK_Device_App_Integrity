@@ -116,7 +116,13 @@ properties, SELinux state, verified-boot state, mount-table anomalies, and nativ
 
 ### Phase 3a — Native walking skeleton *(2–3 days)* — **do this before any detection code**
 
-> **Status:** implemented; awaiting the first CI run with the NDK.
+> **Status:** implemented. First CI runs with the NDK produced the shipped sizes below —
+> arm64-v8a 219 KB, armeabi-v7a 125 KB, x86_64 207 KB, against a 256 KB budget. Almost all
+> of that is the static libc++ pulled in by `ANDROID_STL=c++_static`, which the JNI
+> boundary needs in order to catch C++ exceptions rather than let them escape into the
+> host app. Phase 3b adds real detection logic to a library already close to budget, so
+> either the budget moves with a stated reason or the exception-based containment gets
+> replaced with error codes and `-fno-exceptions`. Decide before writing 3b, not after.
 
 The temptation is to open `integrity-native` and write four thousand lines of anti-Frida
 machinery before finding out whether the `.so` even loads on a consumer's device. This

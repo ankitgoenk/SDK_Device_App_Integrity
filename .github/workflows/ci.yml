@@ -76,12 +76,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assemble testDebugUnitTest test lint
 
-      - name: Assert the release .so is stripped, unexported and within budget
+      - name: Assert the shipped .so is stripped, unexported and within budget
         run: |
           set -euo pipefail
-          mapfile -t libs < <(find integrity-native/build -path '*release*' -name 'libintegrity.so' | sort -u)
-          echo "found ${#libs[@]} release libraries"
-          test "${#libs[@]}" -ge 3
+          # Assert on the AAR, not on build intermediates. Globbing intermediates picks up
+          # pre-strip stages that were never going to ship, which is a property of the
+          # build directory rather than of the artifact.
+          aar=$(find integrity-native/build/outputs/aar -name '*-release.aar' | head -1)
+          test -n "$aar"
+          echo "inspecting $aar"
+          rm -rf /tmp/aar && mkdir -p /tmp/aar
+          unzip -q -o "$aar" -d /tmp/aar
+          mapfile -t libs < <(find /tmp/aar/jni -name 'libintegrity.so' | sort)
+          echo "shipped ABIs: ${#libs[@]}"
+          test "${#libs[@]}" -eq 3
           for so in "${libs[@]}"; do
             size=$(stat -c%s "$so")
             echo "--- $so ($size bytes)"
@@ -96,13 +104,6 @@ jobs:
               echo "FAIL: $so exceeds the 256 KB per-ABI budget"; exit 1
             fi
           done
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-and-lint-reports
-          path: |
-            **/build/reports/
-            **/build/test-results/
 
   instrumented:
     name: Instrumented smoke test
