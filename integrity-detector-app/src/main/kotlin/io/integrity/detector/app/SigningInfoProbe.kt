@@ -3,6 +3,7 @@ package io.integrity.detector.app
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 import java.security.MessageDigest
 
 /**
@@ -28,48 +29,72 @@ internal interface SigningInfoProbe {
     fun matchesLineage(pinSha256: String): Boolean
 }
 
+/**
+ * Every API-28 call sits behind an inline `Build.VERSION.SDK_INT` check into [Api28].
+ * Reading a stored `apiLevel` property instead reads the same to a human but not to Lint,
+ * which then flags each member as unguarded against minSdk 24 — and with
+ * `warningsAsErrors` that fails the build rather than merely nagging.
+ */
 internal class RealSigningInfoProbe(private val context: Context) : SigningInfoProbe {
 
     override val apiLevel: Int = Build.VERSION.SDK_INT
 
     override fun currentSigners(): List<String>? = runCatching {
-        val pm = context.packageManager
-        if (apiLevel >= Build.VERSION_CODES.P) {
-            val info = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-            val signing = info.signingInfo ?: return null
-            val certs = if (signing.hasMultipleSigners()) {
-                signing.apkContentsSigners
-            } else {
-                // Current signer first; history is consulted separately via matchesLineage.
-                signing.apkContentsSigners
-            }
-            certs?.map { sha256Hex(it.toByteArray()) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Api28.currentSigners(context)
         } else {
-            @Suppress("DEPRECATION")
-            val info = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
-            @Suppress("DEPRECATION")
-            info.signatures?.filterNotNull()?.map { sha256Hex(it.toByteArray()) }
+            legacySigners()
         }
     }.getOrNull()
 
     override fun hasMultipleSigners(): Boolean = runCatching {
-        if (apiLevel < Build.VERSION_CODES.P) return false
-        val info = context.packageManager
-            .getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
-        info.signingInfo?.hasMultipleSigners() == true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Api28.hasMultipleSigners(context)
+        } else {
+            false
+        }
     }.getOrDefault(false)
 
     override fun matchesLineage(pinSha256: String): Boolean = runCatching {
-        if (apiLevel < Build.VERSION_CODES.P) return false
-        // The platform's own rotation-aware check: true for the current signer and for any
-        // ancestor in the lineage, which is exactly what makes legitimate key rotation
-        // survive a pin taken before the rotation.
-        context.packageManager.hasSigningCertificate(
-            context.packageName,
-            hexToBytes(pinSha256),
-            PackageManager.CERT_INPUT_SHA256
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Api28.matchesLineage(context, pinSha256)
+        } else {
+            // No lineage exists before 28, so a pin can only ever be the current signer,
+            // which currentSigners() already covers.
+            false
+        }
     }.getOrDefault(false)
+
+    @Suppress("DEPRECATION")
+    private fun legacySigners(): List<String>? = context.packageManager
+        .getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+        .signatures
+        ?.filterNotNull()
+        ?.map { sha256Hex(it.toByteArray()) }
+}
+
+@RequiresApi(Build.VERSION_CODES.P)
+private object Api28 {
+
+    fun currentSigners(context: Context): List<String>? {
+        val signing = signingInfo(context) ?: return null
+        return signing.apkContentsSigners?.map { sha256Hex(it.toByteArray()) }
+    }
+
+    fun hasMultipleSigners(context: Context): Boolean = signingInfo(context)?.hasMultipleSigners() == true
+
+    // The platform's own rotation-aware check: true for the current signer and for any
+    // ancestor in the lineage, which is what makes a pin taken before a legitimate key
+    // rotation keep matching afterwards.
+    fun matchesLineage(context: Context, pinSha256: String): Boolean = context.packageManager.hasSigningCertificate(
+        context.packageName,
+        hexToBytes(pinSha256),
+        PackageManager.CERT_INPUT_SHA256
+    )
+
+    private fun signingInfo(context: Context) = context.packageManager
+        .getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        .signingInfo
 }
 
 internal fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
