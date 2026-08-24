@@ -43,19 +43,18 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 - `SessionStart`/dev-container setup so the build works from a clean clone.
 - **Exit:** `./gradlew build` green in CI; sample app installs and shows an empty report.
 
-> **Status.** All scaffold artefacts are committed and the pure-JVM half is verified: every
-> Kotlin source type-checks under explicit-API-strict with warnings-as-errors, and the
-> `integrity-core` unit tests pass. The Gradle *build* itself is unverified, because the
-> session it was authored in could not reach `dl.google.com` (AGP, AndroidX, Compose and the
-> Android SDK installer all live there), so AGP never resolved. First run on a machine with
-> normal egress:
+> **Status: verified in CI.** All five jobs green on PR #1 (run 4, commit `404eed7`):
+> catalog, static analysis, `apiCheck`, `assemble`+unit tests+lint, and the instrumented
+> smoke test — the last one reporting `Starting 3 tests on emulator-5554 - 14` /
+> `Finished 3 tests`, so the SDK demonstrably initialises and answers on a real Android 14
+> runtime.
 >
-> ```bash
-> ./gradlew apiDump    # bcv has no committed api/*.api yet, so apiCheck fails until this runs
-> ./gradlew build detekt ktlintCheck apiCheck
-> ```
->
-> Expect to fix a version-catalog pin or two on that first run.
+> Getting there took four rounds, each a distinct real defect rather than a flake:
+> a missing API baseline; a ktlint code-style mismatch plus five detekt findings; an AAPT
+> failure from referencing a Material Components XML theme the sample does not depend on;
+> and finally an API dump generated without `-Xjvm-default=all` plus the ktlint Gradle
+> plugin's configuration-cache incompatibility. Two of those were only reachable by running
+> a real Android build, and one only by running the real Gradle plugins.
 
 ### Phase 1 — Core engine and public API *(1–2 weeks)*
 - Data model: `Signal`, `SignalId`, `Category`, `Confidence`, `Evidence`, `IntegrityReport`,
@@ -194,8 +193,12 @@ with 3).
 - [x] `CODEOWNERS`, PR template
 - [x] `tools/check-signal-catalog.py` — CI gate tying every `SignalId` to a catalog row
 - [x] `tools/setup-dev-env.sh` + `SessionStart` hook for clean-clone/web sessions
-- [ ] `./gradlew build` verified green (blocked in the authoring session: `dl.google.com` denied)
-- [ ] `./gradlew apiDump` to seed the committed API surface
+- [x] `./gradlew build` verified green in CI
+- [x] Committed `api/*.api` surface, enforced by `apiCheck`
+- [x] Instrumented smoke test executing on an emulator (3 tests, API 34)
+- [ ] `sample-consumer`: consume a **published AAR** from a local Maven repo rather than
+      `project(...)`, so AAR packaging, consumer ProGuard rules, manifest merging and the
+      ADR-0004 `<queries>` fragment are exercised. Phase 0 is not closed until this exists
 - [ ] Issue templates
 
 ### Phase 1

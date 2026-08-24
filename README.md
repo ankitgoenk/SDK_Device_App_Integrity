@@ -13,8 +13,10 @@ A modular, Kotlin-first Android SDK that answers two questions for the host app 
 The SDK produces an **evidence-based report**, not a boolean. The host app — and ideally the
 host's **backend** — decides what to do with it.
 
-> **Status:** phase 0 complete — the multi-module scaffold, public API skeleton, quality
-> gates and CI are in place. Detectors land in phases 2–7 and every `evaluate()` currently
+> **Status:** phase 0 substantially complete and green in CI — the multi-module scaffold,
+> public API skeleton, quality gates and CI are in place, and an instrumented test proves
+> the SDK initialises and answers on a real device. One item remains: a `sample-consumer`
+> that consumes a published AAR (see [docs/PLAN.md](docs/PLAN.md)). Detectors land in phases 2–7 and every `evaluate()` currently
 > returns `UNKNOWN`. Start with [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
