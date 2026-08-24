@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose Material3 ships no XML themes, so the manifest theme comes from the
+      framework rather than from com.google.android.material. Keeps the sample free of a
+      dependency it does not otherwise need.
+    -->
+    <style name="Theme.IntegritySample" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+</resources>

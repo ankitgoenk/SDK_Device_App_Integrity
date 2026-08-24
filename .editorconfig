@@ -1,0 +1,21 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+# Must match the Gradle plugin's ktlint { android.set(true) }, so the CLI and CI agree.
+ktlint_code_style = android_studio
+ktlint_standard_function-naming = disabled
+max_line_length = 120
+
+[*.{xml,yml,yaml,json,toml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

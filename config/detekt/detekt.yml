@@ -1,0 +1,38 @@
+# Builds on detekt's defaults (buildUponDefaultConfig = true); only deltas live here.
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    # Signal/report constructors are wide by nature; they are data carriers.
+    ignoreDataClasses: true
+    functionThreshold: 8
+    constructorThreshold: 10
+  TooManyFunctions:
+    thresholdInClasses: 15
+    thresholdInObjects: 15
+
+style:
+  MagicNumber:
+    # Enum payloads (e.g. Weight.HIGH(25)) are the definition of the constant, not a use.
+    ignoreEnums: true
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    max: 4
+  ForbiddenComment:
+    # TODO(phase-N) markers are how the scaffold points at the plan; they are intentional.
+    active: false
+
+exceptions:
+  TooGenericExceptionCaught:
+    # Detector isolation deliberately catches Throwable — a detector must never crash the host.
+    active: false
+  SwallowedException:
+    active: true
+
+naming:
+  FunctionNaming:
+    functionPattern: '[a-z][a-zA-Z0-9]*'
+    # @Composable functions are PascalCase by convention, not a naming violation.
+    ignoreAnnotated: ['Composable']

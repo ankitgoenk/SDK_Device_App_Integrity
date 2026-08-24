@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      No <queries> here on purpose. The entries the SDK needs must arrive by manifest
+      merging from integrity-detector-environment's AAR (ADR-0004). The CI job asserts
+      they appear in the merged manifest.
+    -->
+
+    <application
+        android:name=".ConsumerApplication"
+        android:allowBackup="false"
+        android:label="Integrity AAR Consumer" />
+
+</manifest>

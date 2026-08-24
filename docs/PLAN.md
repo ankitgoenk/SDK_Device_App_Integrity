@@ -34,7 +34,7 @@ These block Phase 1. Answer them, record each as an ADR in [`adr/`](adr/).
 Estimates assume one experienced Android engineer, with ~0.5 engineer of native/security
 support from Phase 3. Phases 2–6 are largely parallelisable across two engineers.
 
-### Phase 0 — Repository scaffold *(3–5 days)*
+### Phase 0 — Repository scaffold *(3–5 days)* — **DONE**
 - Gradle multi-module skeleton exactly as in [ARCHITECTURE.md](ARCHITECTURE.md#module-layout).
 - `sample-app` (a deliberately boring app that renders a live report) and `sample-backend`
   stub for verification.
@@ -43,7 +43,20 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 - `SessionStart`/dev-container setup so the build works from a clean clone.
 - **Exit:** `./gradlew build` green in CI; sample app installs and shows an empty report.
 
-### Phase 1 — Core engine and public API *(1–2 weeks)*
+> **Status: verified in CI.** All five jobs green on PR #1 (run 4, commit `404eed7`):
+> catalog, static analysis, `apiCheck`, `assemble`+unit tests+lint, and the instrumented
+> smoke test — the last one reporting `Starting 3 tests on emulator-5554 - 14` /
+> `Finished 3 tests`, so the SDK demonstrably initialises and answers on a real Android 14
+> runtime.
+>
+> Getting there took four rounds, each a distinct real defect rather than a flake:
+> a missing API baseline; a ktlint code-style mismatch plus five detekt findings; an AAPT
+> failure from referencing a Material Components XML theme the sample does not depend on;
+> and finally an API dump generated without `-Xjvm-default=all` plus the ktlint Gradle
+> plugin's configuration-cache incompatibility. Two of those were only reachable by running
+> a real Android build, and one only by running the real Gradle plugins.
+
+### Phase 1 — Core engine and public API *(1–2 weeks)* — **DONE**
 - Data model: `Signal`, `SignalId`, `Category`, `Confidence`, `Evidence`, `IntegrityReport`,
   `Verdict`. See [API_DESIGN.md](API_DESIGN.md).
 - `Detector` SPI + `DetectionEngine`: parallel execution, per-detector timeout, crash
@@ -54,13 +67,38 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 - **Exit:** engine runs 3 fake detectors, scoring is unit-tested to 90%+, `QUICK` pass
   measured under 20 ms on a mid-tier device.
 
-### Phase 2 — Root & privileged-environment detection *(1 week)*
+> **Status.** Engine, scoring, policy and cache are implemented and covered by 38 unit
+> tests (17 of them on the scorer alone, one per documented rule). The instrumented tests
+> confirm the engine dispatches a registered detector and reports full coverage on a real
+> device. The `QUICK` timing target is **not** measured yet — that needs the macrobenchmark
+> from phase 9, and there is no point benchmarking an engine with no real detectors in it.
+
+### Phase 2 — Root & privileged-environment detection *(1 week)* — **IN PROGRESS**
 Signals `ROOT_*` in [DETECTION_CATALOG.md](DETECTION_CATALOG.md#1-root--privileged-environment).
 Covers su/busybox/Magisk/KernelSU/APatch artefacts, manager packages, dangerous
 properties, SELinux state, verified-boot state, mount-table anomalies, and native
 `__system_property_get` vs. `getprop` divergence (resetprop detection).
 - **Exit:** true positive on Magisk (with DenyList on and off) and KernelSU test devices;
   zero positives across the clean-device matrix in [TESTING.md](TESTING.md).
+
+> **Status.** First slice landed: `ROOT_SU_BINARY`, `ROOT_MANAGER_PACKAGE` and
+> `ROOT_DANGEROUS_PROPS`, JVM layer only, 22 unit tests, each with a catalog row stating
+> technique, false-positive risk and known bypass (enforced by CI).
+>
+> Be clear about what this buys: **all three are defeated by a hidden Magisk install.**
+> DenyList unmounts the artefacts, the manager repackages under a random name, and
+> `resetprop` rewrites the build tags. They catch careless setups and generate shadow-mode
+> evidence; they are not a root check anyone should enforce on. The signals with teeth —
+> mount-table divergence, property spoofing, verified-boot state — need the native core in
+> phase 3, and the authoritative answer is Play Integrity server-side in phase 7.
+>
+> All three ship at `INFORMATIONAL` per hard rule 6, so they contribute nothing to the score
+> until a host opts in via `RootDetectors.proposedWeights(policy)`. An instrumented test
+> asserts that end-to-end.
+>
+> Still open for phase 2: property/mount signals, `ROOT_KERNELSU`, `ROOT_APATCH`,
+> `ROOT_SELINUX_PERMISSIVE`, `ROOT_RW_SYSTEM`, `ROOT_UID_ZERO`, and the rooted-device test
+> rigs from [TESTING.md](TESTING.md), which no CI emulator can substitute for.
 
 ### Phase 3 — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
 Signals `HOOK_*`. JVM layer (stack-trace probes, Xposed classes/artefacts, `TracerPid`,
@@ -173,20 +211,37 @@ with 3).
 ## 3. Work breakdown checklist
 
 ### Phase 0
-- [ ] `settings.gradle.kts` with all modules; version catalog (`gradle/libs.versions.toml`)
-- [ ] Convention plugins (`build-logic/`) for android-library and native modules
-- [ ] `sample-app` with a report screen
-- [ ] CI workflow: build, unit test, lint, detekt, API dump check, instrumented smoke test
-- [ ] `CODEOWNERS`, PR template, issue templates
+- [x] `settings.gradle.kts` with all modules; version catalog (`gradle/libs.versions.toml`)
+- [x] Convention plugins (`build-logic/`) for android-library, application and JVM modules
+- [x] `sample-app` with a report screen
+- [x] CI workflow: build, unit test, lint, detekt, ktlint, API check, catalog check, instrumented smoke test
+- [x] `CODEOWNERS`, PR template
+- [x] `tools/check-signal-catalog.py` — CI gate tying every `SignalId` to a catalog row
+- [x] `tools/setup-dev-env.sh` + `SessionStart` hook for clean-clone/web sessions
+- [x] `./gradlew build` verified green in CI
+- [x] Committed `api/*.api` surface, enforced by `apiCheck`
+- [x] Instrumented smoke test executing on an emulator (3 tests, API 34)
+- [x] `sample-consumer`: consumes a **published AAR** from a local Maven repo, exercising
+      AAR packaging, consumer ProGuard rules under R8, manifest merging and the ADR-0004
+      `<queries>` fragment — with CI asserting `QUERY_ALL_PACKAGES` never appears
+- [x] Evidence-chain CI gate (`tools/check-signal-catalog.py`)
+- [ ] Issue templates (deferred; not a phase 0 blocker)
+
+**Phase 0 is closed.** Run 7 of CI on PR #1 was green across all six jobs, with
+`Starting 4 tests` / `Starting 3 tests` on an Android 14 emulator for `sample-app` and
+`sample-consumer` respectively — so both the project-dependency and published-AAR paths are
+verified on a real runtime, not merely built.
 
 ### Phase 1
-- [ ] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`
-- [ ] `Detector` SPI: `id`, `category`, `depth`, `cost`, `suspend fun detect(ctx): List<Signal>`
-- [ ] `DetectionEngine`: parallel dispatch, per-detector timeout, `runCatching` isolation
-- [ ] `ReportCache` with TTL + invalidation on process/lifecycle events
-- [ ] `Policy` + `RiskScorer` + `Verdict`
-- [ ] `IntegrityGuard` facade, thread-safe init, idempotent
-- [ ] Java interop check (`@JvmStatic`, callback variant of the suspend API)
+- [x] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`
+- [x] `Detector` SPI: `id`, `category`, `minDepth`, `budget`, `suspend fun detect(ctx)`
+- [x] `DetectionEngine`: parallel dispatch, per-detector timeout, crash isolation
+- [x] `ReportCache` with per-depth TTL
+- [x] `Policy` + `Weight` + `RiskScorer` + `Verdict`, incl. every documented escalation rule
+- [x] `IntegrityGuard` facade, thread-safe init, idempotent, `reports()` flow
+- [ ] Cache invalidation on package-changed / foreground-after-gap events
+- [ ] Java interop check (callback variant of the suspend API, `Cancellable`)
+- [ ] `QUICK` pass measured under 20 ms (needs the phase 9 macrobenchmark)
 
 ### Phase 2–6
 - [ ] One PR per signal family, each with: implementation, unit tests, an instrumented test,

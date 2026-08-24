@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+jobs:
+  catalog:
+    name: Signal catalog consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Every SignalId in code must have a documented technique, weight, FP analysis
+      # and known bypass in docs/DETECTION_CATALOG.md.
+      - run: tools/check-signal-catalog.py
+
+  quality:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # --no-configuration-cache: the ktlint Gradle plugin (12.2.0) holds a Project
+      # reference in its task state, which the configuration cache cannot serialize
+      # (124 problems). Scoped to this job so the cache still benefits the real build.
+      - run: ./gradlew detekt ktlintCheck --no-configuration-cache
+
+  api:
+    name: Public API compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # Fails when the committed api/*.api dumps no longer match the source.
+      # Regenerate deliberately with ./gradlew apiDump and review the diff.
+      - run: ./gradlew apiCheck
+
+  build:
+    name: Build and unit test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew assemble testDebugUnitTest test lint
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-and-lint-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+
+  instrumented:
+    name: Instrumented smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          script: ./gradlew connectedDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: instrumented-reports
+          path: '**/build/reports/androidTests/'
+
+  consumer:
+    name: AAR consumer (published artifact)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Publish the SDK to a local Maven repository
+        run: ./gradlew publishAllPublicationsToLocalRepoRepository
+
+      - name: Show what was published
+        run: find build/local-maven -name '*.aar' -o -name '*.pom' | sort
+
+      # sample-consumer is a separate Gradle build, so these coordinates can only resolve
+      # from the AARs published above. R8 is on for the release build, which is what
+      # exercises the consumer ProGuard rules shipped inside the AAR.
+      - name: Build the consumer against the published AARs
+        run: ./gradlew -p sample-consumer assembleDebug assembleRelease assembleDebugAndroidTest
+
+      - name: Assert the ADR-0004 queries merged in from the AAR
+        run: |
+          set -euo pipefail
+          mapfile -t manifests < <(find sample-consumer/build -path '*merged_manifest*' \
+            -name 'AndroidManifest.xml' ! -path '*ndroidTest*')
+          echo "found ${#manifests[@]} merged manifest(s)"
+          test "${#manifests[@]}" -gt 0
+          for m in "${manifests[@]}"; do
+            echo "--- $m"
+            grep -q 'com.topjohnwu.magisk' "$m" \
+              || { echo "FAIL: detector-environment <queries> did not merge into $m"; exit 1; }
+            grep -q 'com.guoshi.httpcanary' "$m" \
+              || { echo "FAIL: MITM-proxy queries entry missing from $m"; exit 1; }
+            if grep -q 'QUERY_ALL_PACKAGES' "$m"; then
+              echo "FAIL: QUERY_ALL_PACKAGES must never be declared (ADR-0004)"; exit 1
+            fi
+          done
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          script: ./gradlew -p sample-consumer connectedDebugAndroidTest
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: consumer-reports
+          path: 'sample-consumer/build/reports/'

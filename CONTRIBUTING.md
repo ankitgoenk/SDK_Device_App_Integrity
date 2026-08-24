@@ -7,14 +7,38 @@
 - Conventional commits: `feat(detector-root): add KernelSU artefact probe`.
 - One signal family per PR wherever possible.
 
-## Definition of done for a detector PR
+## Definition of done for a detector
+
+Every signal ships the whole chain. A signal is only worth as much as what is known about
+it, and the parts people skip under deadline — the bypass note and the false-positive
+analysis — are the parts that decide whether it is safe to enforce.
+
+```
+Signal            a stable SignalId, one family per PR
+  ↓
+Evidence          what the check observes, and the bounded, non-PII evidence keys it emits
+  ↓
+Expected result   which Confidence, on which device state, and what INCONCLUSIVE means here
+  ↓
+Unit test         parser and decision logic, against fixtures
+  ↓
+Instrumented test where appropriate: one positive condition, one clean device
+  ↓
+Known bypass      how you would defeat it. "I couldn't" is not an answer; say why it is hard
+  ↓
+FP analysis       a legitimate configuration that could trigger it, and why the weight is safe
+```
+
+Four of these are enforced by `tools/check-signal-catalog.py` in CI: a `SignalId` in
+production code must have a catalog row, that row must state a technique, a false-positive
+risk and a known bypass, and at least one unit test must reference the signal by name.
+The rest is review, because a checker that guessed at them would only teach people how to
+satisfy the checker.
 
 - [ ] Implementation in the correct module (native where a JVM implementation is trivially hookable)
-- [ ] `SignalId` constant with a stable string, plus a row in `docs/DETECTION_CATALOG.md`
+- [ ] `SignalId` constant with a stable string, plus a complete row in `docs/DETECTION_CATALOG.md`
 - [ ] Unit tests against fixtures in `integrity-testing/fixtures/`
 - [ ] Instrumented test: one positive condition, one clean condition
-- [ ] False-positive analysis in the PR description: name a legitimate configuration that
-      could trigger this and justify the default weight
 - [ ] Default weight is conservative (new signals ship `INFORMATIONAL` until shadow-mode data
       supports promotion)
 - [ ] Per-detector budget respected; no main-thread IO; cancellation-aware

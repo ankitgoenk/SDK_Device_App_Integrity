@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "tools/setup-dev-env.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
