@@ -14,12 +14,11 @@ public class Signal(
     public val confidence: Confidence,
     public val evidence: Map<String, String> = emptyMap(),
     public val detectorVersion: Int = 1,
-    public val detectedAtMillis: Long = System.currentTimeMillis(),
+    public val detectedAtMillis: Long = System.currentTimeMillis()
 ) {
     override fun toString(): String = "Signal(${id.value}, $confidence)"
 
-    override fun equals(other: Any?): Boolean =
-        other is Signal && other.id == id && other.confidence == confidence
+    override fun equals(other: Any?): Boolean = other is Signal && other.id == id && other.confidence == confidence
 
     override fun hashCode(): Int = 31 * id.hashCode() + confidence.hashCode()
 }

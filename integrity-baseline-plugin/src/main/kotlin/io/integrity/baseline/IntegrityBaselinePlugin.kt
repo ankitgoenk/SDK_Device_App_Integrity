@@ -21,7 +21,7 @@ public class IntegrityBaselinePlugin : Plugin<Project> {
     override fun apply(target: Project) {
         val extension = target.extensions.create(
             EXTENSION_NAME,
-            IntegrityBaselineExtension::class.java,
+            IntegrityBaselineExtension::class.java
         )
 
         target.tasks.register(TASK_NAME) { task ->
@@ -31,7 +31,7 @@ public class IntegrityBaselinePlugin : Plugin<Project> {
                 task.logger.lifecycle(
                     "integrity-baseline: not implemented yet (phase 4). " +
                         "verifyDexDigests=${extension.verifyDexDigests.get()}, " +
-                        "obfuscateStrings=${extension.obfuscateStrings.get()}",
+                        "obfuscateStrings=${extension.obfuscateStrings.get()}"
                 )
             }
         }

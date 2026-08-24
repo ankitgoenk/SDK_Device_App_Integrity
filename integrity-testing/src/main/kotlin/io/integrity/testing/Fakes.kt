@@ -2,15 +2,15 @@ package io.integrity.testing
 
 import io.integrity.core.Category
 import io.integrity.core.Confidence
-import io.integrity.core.DetectionContext
 import io.integrity.core.Depth
+import io.integrity.core.DetectionContext
 import io.integrity.core.Detector
 import io.integrity.core.IntegrityReport
 import io.integrity.core.ReportSink
 import io.integrity.core.Signal
 import io.integrity.core.SignalId
-import kotlinx.coroutines.delay
 import kotlin.time.Duration
+import kotlinx.coroutines.delay
 
 /**
  * A detector whose behaviour is dictated by the test: emit fixed signals, stall past its
@@ -23,7 +23,7 @@ public class ScriptedDetector(
     override val budget: Duration = Detector.DEFAULT_BUDGET,
     private val signals: List<Signal> = emptyList(),
     private val stallFor: Duration? = null,
-    private val throwing: Throwable? = null,
+    private val throwing: Throwable? = null
 ) : Detector {
 
     public var invocations: Int = 0
@@ -55,5 +55,5 @@ public fun signal(
     id: SignalId,
     category: Category = Category.META,
     confidence: Confidence = Confidence.CONFIRMED,
-    evidence: Map<String, String> = emptyMap(),
+    evidence: Map<String, String> = emptyMap()
 ): Signal = Signal(id = id, category = category, confidence = confidence, evidence = evidence)

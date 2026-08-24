@@ -51,7 +51,7 @@ private fun ReportScreen() {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(text = "Verdict: ${report.verdict}", style = MaterialTheme.typography.headlineSmall)
         Text(text = "Risk score: ${report.riskScore}/100")
@@ -79,5 +79,4 @@ private fun ReportScreen() {
     }
 }
 
-private suspend fun evaluate(depth: Depth): IntegrityReport =
-    IntegrityGuard.evaluate(depth = depth, force = true)
+private suspend fun evaluate(depth: Depth): IntegrityReport = IntegrityGuard.evaluate(depth = depth, force = true)

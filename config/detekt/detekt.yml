@@ -31,3 +31,5 @@ exceptions:
 naming:
   FunctionNaming:
     functionPattern: '[a-z][a-zA-Z0-9]*'
+    # @Composable functions are PascalCase by convention, not a naming violation.
+    ignoreAnnotated: ['Composable']

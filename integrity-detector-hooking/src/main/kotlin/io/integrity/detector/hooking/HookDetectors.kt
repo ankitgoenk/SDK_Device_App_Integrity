@@ -3,7 +3,8 @@ package io.integrity.detector.hooking
 import io.integrity.core.Detector
 
 /**
- * HOOK_* signals: Frida, Xposed-family hooking, ART method anomalies, inline and PLT/GOT hooks, debuggers. Most of the work lives in :integrity-native.
+ * HOOK_* signals: Frida, Xposed-family hooking, ART method anomalies, inline and PLT/GOT
+ * hooks, debuggers. Most of the work lives in :integrity-native.
  *
  * Phase 0 scaffold: no detectors registered yet. Phase 3 populates this module,
  * one signal family per pull request. Every signal added here must also get a row in

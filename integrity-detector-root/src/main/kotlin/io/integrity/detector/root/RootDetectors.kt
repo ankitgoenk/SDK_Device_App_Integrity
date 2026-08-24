@@ -3,7 +3,8 @@ package io.integrity.detector.root
 import io.integrity.core.Detector
 
 /**
- * ROOT_* signals: su/busybox artefacts, Magisk, KernelSU, APatch, dangerous properties, SELinux and verified-boot state, mount anomalies, property spoofing.
+ * ROOT_* signals: su/busybox artefacts, Magisk, KernelSU, APatch, dangerous properties,
+ * SELinux and verified-boot state, mount anomalies, property spoofing.
  *
  * Phase 0 scaffold: no detectors registered yet. Phase 2 populates this module,
  * one signal family per pull request. Every signal added here must also get a row in

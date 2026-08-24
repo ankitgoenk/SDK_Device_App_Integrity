@@ -1,0 +1,5 @@
+public final class io/integrity/detector/root/RootDetectors {
+	public static final field INSTANCE Lio/integrity/detector/root/RootDetectors;
+	public final fun all ()Ljava/util/List;
+}
+

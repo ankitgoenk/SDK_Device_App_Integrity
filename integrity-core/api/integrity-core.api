@@ -1,0 +1,178 @@
+public final class io/integrity/core/Category : java/lang/Enum {
+	public static final field APP_TAMPER Lio/integrity/core/Category;
+	public static final field ATTESTATION Lio/integrity/core/Category;
+	public static final field EMULATION Lio/integrity/core/Category;
+	public static final field ENVIRONMENT Lio/integrity/core/Category;
+	public static final field HOOKING Lio/integrity/core/Category;
+	public static final field META Lio/integrity/core/Category;
+	public static final field ROOT Lio/integrity/core/Category;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Category;
+	public static fun values ()[Lio/integrity/core/Category;
+}
+
+public final class io/integrity/core/CompositeSink : io/integrity/core/ReportSink {
+	public fun <init> (Ljava/util/List;)V
+	public fun onReport (Lio/integrity/core/IntegrityReport;)V
+}
+
+public final class io/integrity/core/Confidence : java/lang/Enum {
+	public static final field CONFIRMED Lio/integrity/core/Confidence;
+	public static final field INCONCLUSIVE Lio/integrity/core/Confidence;
+	public static final field LIKELY Lio/integrity/core/Confidence;
+	public static final field POSSIBLE Lio/integrity/core/Confidence;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Confidence;
+	public static fun values ()[Lio/integrity/core/Confidence;
+}
+
+public final class io/integrity/core/Depth : java/lang/Enum {
+	public static final field FULL Lio/integrity/core/Depth;
+	public static final field QUICK Lio/integrity/core/Depth;
+	public static final field STANDARD Lio/integrity/core/Depth;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Depth;
+	public static fun values ()[Lio/integrity/core/Depth;
+}
+
+public abstract interface class io/integrity/core/DetectionContext {
+	public abstract fun getAppContext ()Landroid/content/Context;
+	public abstract fun getConfig ()Lio/integrity/core/IntegrityConfig;
+}
+
+public abstract interface class io/integrity/core/Detector {
+	public static final field Companion Lio/integrity/core/Detector$Companion;
+	public abstract fun detect (Lio/integrity/core/DetectionContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getBudget-UwyO8pc ()J
+	public abstract fun getCategory ()Lio/integrity/core/Category;
+	public abstract fun getId ()Ljava/lang/String;
+	public abstract fun getMinDepth ()Lio/integrity/core/Depth;
+}
+
+public final class io/integrity/core/Detector$Companion {
+	public final fun getDEFAULT_BUDGET-UwyO8pc ()J
+}
+
+public final class io/integrity/core/Detector$DefaultImpls {
+	public static fun getBudget-UwyO8pc (Lio/integrity/core/Detector;)J
+}
+
+public final class io/integrity/core/IntegrityConfig {
+	public static final field Companion Lio/integrity/core/IntegrityConfig$Companion;
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/List;Lio/integrity/core/ReportSink;Ljava/util/Set;JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAllowlistedPackages ()Ljava/util/Set;
+	public final fun getDetectorBudget-UwyO8pc ()J
+	public final fun getDetectors ()Ljava/util/List;
+	public final fun getExpectedPackageName ()Ljava/lang/String;
+	public final fun getExpectedSigningCertSha256 ()Ljava/util/Set;
+	public final fun getSink ()Lio/integrity/core/ReportSink;
+}
+
+public final class io/integrity/core/IntegrityConfig$Builder {
+	public fun <init> ()V
+	public final fun addDetector (Lio/integrity/core/Detector;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun allowlistPackages ([Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun build ()Lio/integrity/core/IntegrityConfig;
+	public final fun detectorBudget-LRDsOJo (J)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun detectors (Ljava/util/List;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun expectedPackageName (Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun expectedSigningCertSha256 ([Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun reportSink (Lio/integrity/core/ReportSink;)Lio/integrity/core/IntegrityConfig$Builder;
+}
+
+public final class io/integrity/core/IntegrityConfig$Companion {
+	public final fun getMIN_BUDGET-UwyO8pc ()J
+}
+
+public final class io/integrity/core/IntegrityGuard {
+	public static final field INSTANCE Lio/integrity/core/IntegrityGuard;
+	public static final fun currentReport ()Lio/integrity/core/IntegrityReport;
+	public final fun evaluate (Lio/integrity/core/Depth;ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun evaluate$default (Lio/integrity/core/IntegrityGuard;Lio/integrity/core/Depth;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static final fun initialize (Landroid/content/Context;Lio/integrity/core/IntegrityConfig;)V
+	public static final fun isInitialized ()Z
+	public static final fun shutdown ()V
+}
+
+public final class io/integrity/core/IntegrityReport {
+	public static final field Companion Lio/integrity/core/IntegrityReport$Companion;
+	public static final field SDK_VERSION Ljava/lang/String;
+	public fun <init> (Lio/integrity/core/Verdict;ILjava/util/Map;Ljava/util/List;FLio/integrity/core/Depth;JLjava/lang/String;Ljava/lang/String;)V
+	public final fun getCategoryScores ()Ljava/util/Map;
+	public final fun getCoverage ()F
+	public final fun getDepth ()Lio/integrity/core/Depth;
+	public final fun getGeneratedAtMillis ()J
+	public final fun getReportId ()Ljava/lang/String;
+	public final fun getRiskScore ()I
+	public final fun getSdkVersion ()Ljava/lang/String;
+	public final fun getSignals ()Ljava/util/List;
+	public final fun getVerdict ()Lio/integrity/core/Verdict;
+	public final fun hasSignal-ZzZ-_2s (Ljava/lang/String;)Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/IntegrityReport$Companion {
+	public final fun unknown (Lio/integrity/core/Depth;Ljava/util/List;)Lio/integrity/core/IntegrityReport;
+	public static synthetic fun unknown$default (Lio/integrity/core/IntegrityReport$Companion;Lio/integrity/core/Depth;Ljava/util/List;ILjava/lang/Object;)Lio/integrity/core/IntegrityReport;
+}
+
+public final class io/integrity/core/LogcatSink : io/integrity/core/ReportSink {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun onReport (Lio/integrity/core/IntegrityReport;)V
+}
+
+public abstract interface class io/integrity/core/ReportSink {
+	public abstract fun onReport (Lio/integrity/core/IntegrityReport;)V
+}
+
+public final class io/integrity/core/Signal {
+	public synthetic fun <init> (Ljava/lang/String;Lio/integrity/core/Category;Lio/integrity/core/Confidence;Ljava/util/Map;IJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Lio/integrity/core/Category;Lio/integrity/core/Confidence;Ljava/util/Map;IJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCategory ()Lio/integrity/core/Category;
+	public final fun getConfidence ()Lio/integrity/core/Confidence;
+	public final fun getDetectedAtMillis ()J
+	public final fun getDetectorVersion ()I
+	public final fun getEvidence ()Ljava/util/Map;
+	public final fun getId-isIsmlw ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/SignalId {
+	public static final field Companion Lio/integrity/core/SignalId$Companion;
+	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/integrity/core/SignalId;
+	public static fun constructor-impl (Ljava/lang/String;)Ljava/lang/String;
+	public fun equals (Ljava/lang/Object;)Z
+	public static fun equals-impl (Ljava/lang/String;Ljava/lang/Object;)Z
+	public static final fun equals-impl0 (Ljava/lang/String;Ljava/lang/String;)Z
+	public final fun getValue ()Ljava/lang/String;
+	public fun hashCode ()I
+	public static fun hashCode-impl (Ljava/lang/String;)I
+	public fun toString ()Ljava/lang/String;
+	public static fun toString-impl (Ljava/lang/String;)Ljava/lang/String;
+	public final synthetic fun unbox-impl ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/SignalId$Companion {
+	public final fun getMETA_CONFIG_INVALID-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_DETECTOR_ERROR-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_DETECTOR_TIMEOUT-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_ENGINE_NOT_IMPLEMENTED-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_NATIVE_UNAVAILABLE-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_VISIBILITY_RESTRICTED-isIsmlw ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/Verdict : java/lang/Enum {
+	public static final field COMPROMISED Lio/integrity/core/Verdict;
+	public static final field LOW_RISK Lio/integrity/core/Verdict;
+	public static final field SUSPICIOUS Lio/integrity/core/Verdict;
+	public static final field TRUSTED Lio/integrity/core/Verdict;
+	public static final field UNKNOWN Lio/integrity/core/Verdict;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Verdict;
+	public static fun values ()[Lio/integrity/core/Verdict;
+}
+

@@ -15,7 +15,7 @@ apiValidation {
         "sample-app",
         "sample-backend",
         "integrity-baseline-plugin",
-        "integrity-testing",
+        "integrity-testing"
     )
 }
 

@@ -10,7 +10,7 @@ public class IntegrityConfig private constructor(
     public val detectors: List<Detector>,
     public val sink: ReportSink?,
     public val allowlistedPackages: Set<String>,
-    public val detectorBudget: Duration,
+    public val detectorBudget: Duration
 ) {
     public class Builder {
         private var expectedPackageName: String? = null
@@ -57,7 +57,7 @@ public class IntegrityConfig private constructor(
             detectors = detectors.toList(),
             sink = sink,
             allowlistedPackages = allowlist.toSet(),
-            detectorBudget = detectorBudget,
+            detectorBudget = detectorBudget
         )
     }
 

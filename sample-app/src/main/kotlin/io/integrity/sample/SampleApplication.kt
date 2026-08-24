@@ -31,10 +31,10 @@ class SampleApplication : Application() {
                         HookDetectors.all() +
                         AppDetectors.all() +
                         EnvironmentDetectors.all() +
-                        EmulatorDetectors.all(),
+                        EmulatorDetectors.all()
                 )
                 .reportSink(LogcatSink())
-                .build(),
+                .build()
         )
 
         // Never gate app start on this: the full sweep runs off the critical path and the

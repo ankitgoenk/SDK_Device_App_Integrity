@@ -27,8 +27,8 @@ class IntegrityReportTest {
         val report = IntegrityReport.unknown(
             depth = Depth.FULL,
             signals = listOf(
-                Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED),
-            ),
+                Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED)
+            )
         )
 
         assertThat(report.hasSignal(SignalId.META_NATIVE_UNAVAILABLE)).isTrue()

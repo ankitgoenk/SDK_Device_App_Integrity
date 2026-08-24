@@ -9,6 +9,8 @@ indent_style = space
 indent_size = 4
 
 [*.{kt,kts}]
+# Must match the Gradle plugin's ktlint { android.set(true) }, so the CLI and CI agree.
+ktlint_code_style = android_studio
 ktlint_standard_function-naming = disabled
 max_line_length = 120
 

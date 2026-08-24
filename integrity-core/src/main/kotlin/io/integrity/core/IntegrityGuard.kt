@@ -28,8 +28,7 @@ public object IntegrityGuard {
 
     /** Last cached report, or an UNKNOWN report if none has been produced. Never blocks. */
     @JvmStatic
-    public fun currentReport(): IntegrityReport =
-        state.get()?.lastReport?.get() ?: notInitialised(Depth.QUICK)
+    public fun currentReport(): IntegrityReport = state.get()?.lastReport?.get() ?: notInitialised(Depth.QUICK)
 
     /**
      * Runs an evaluation at the requested depth.
@@ -38,7 +37,7 @@ public object IntegrityGuard {
      */
     public suspend fun evaluate(
         depth: Depth = Depth.STANDARD,
-        @Suppress("UNUSED_PARAMETER") force: Boolean = false,
+        @Suppress("UNUSED_PARAMETER") force: Boolean = false
     ): IntegrityReport {
         val current = state.get() ?: return notInitialised(depth)
 
@@ -51,9 +50,9 @@ public object IntegrityGuard {
                     id = SignalId.META_ENGINE_NOT_IMPLEMENTED,
                     category = Category.META,
                     confidence = Confidence.INCONCLUSIVE,
-                    evidence = mapOf("registeredDetectors" to current.config.detectors.size.toString()),
-                ),
-            ),
+                    evidence = mapOf("registeredDetectors" to current.config.detectors.size.toString())
+                )
+            )
         )
 
         current.lastReport.set(report)
@@ -73,15 +72,12 @@ public object IntegrityGuard {
                 id = SignalId.META_CONFIG_INVALID,
                 category = Category.META,
                 confidence = Confidence.INCONCLUSIVE,
-                evidence = mapOf("reason" to "not_initialized"),
-            ),
-        ),
+                evidence = mapOf("reason" to "not_initialized")
+            )
+        )
     )
 
-    private class State(
-        val appContext: Context,
-        val config: IntegrityConfig,
-    ) {
+    private class State(val appContext: Context, val config: IntegrityConfig) {
         val lastReport: AtomicReference<IntegrityReport?> = AtomicReference(null)
     }
 }

@@ -18,9 +18,11 @@ package io.integrity.sample.backend
  */
 class VerificationService {
 
-    fun issueNonce(sessionId: String): Nonce = TODO("phase 7: 32 random bytes, 120s TTL, single use, bound to $sessionId")
+    fun issueNonce(sessionId: String): Nonce =
+        TODO("phase 7: 32 random bytes, 120s TTL, single use, bound to $sessionId")
 
-    fun verify(submission: ReportSubmission): Decision = TODO("phase 7: see the ordered checks above")
+    fun verify(submission: ReportSubmission): Decision =
+        TODO("phase 7: run the ordered checks above over nonce=${submission.nonce}, keyId=${submission.keyId}")
 }
 
 data class Nonce(val value: String, val expiresAtEpochSeconds: Long)
@@ -30,7 +32,7 @@ data class ReportSubmission(
     val signature: String,
     val keyId: String,
     val nonce: String,
-    val playIntegrityToken: String?,
+    val playIntegrityToken: String?
 )
 
 enum class Decision { ALLOW, STEP_UP, REVIEW, DENY }

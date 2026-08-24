@@ -8,7 +8,7 @@ public enum class Category {
     ENVIRONMENT,
     EMULATION,
     ATTESTATION,
-    META,
+    META
 }
 
 /**
@@ -22,7 +22,7 @@ public enum class Confidence {
     CONFIRMED,
     LIKELY,
     POSSIBLE,
-    INCONCLUSIVE,
+    INCONCLUSIVE
 }
 
 /** How much work an evaluation is allowed to do. See docs/API_DESIGN.md. */
@@ -34,7 +34,7 @@ public enum class Depth {
     STANDARD,
 
     /** Adds native scans, socket probes, digest verification, attestation. Target <= 1 s. */
-    FULL,
+    FULL
 }
 
 /**
@@ -48,5 +48,5 @@ public enum class Verdict {
     COMPROMISED,
 
     /** Not initialised, or coverage too low for the result to mean anything. */
-    UNKNOWN,
+    UNKNOWN
 }

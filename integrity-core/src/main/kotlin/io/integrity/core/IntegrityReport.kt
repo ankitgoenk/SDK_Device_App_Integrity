@@ -17,7 +17,7 @@ public class IntegrityReport(
     public val depth: Depth,
     public val generatedAtMillis: Long,
     public val sdkVersion: String,
-    public val reportId: String,
+    public val reportId: String
 ) {
     public fun hasSignal(id: SignalId): Boolean = signals.any { it.id == id }
 
@@ -28,10 +28,7 @@ public class IntegrityReport(
         public const val SDK_VERSION: String = "0.1.0-alpha01"
 
         /** Returned before initialisation, and whenever coverage is too low to judge. */
-        public fun unknown(
-            depth: Depth,
-            signals: List<Signal> = emptyList(),
-        ): IntegrityReport = IntegrityReport(
+        public fun unknown(depth: Depth, signals: List<Signal> = emptyList()): IntegrityReport = IntegrityReport(
             verdict = Verdict.UNKNOWN,
             riskScore = 0,
             categoryScores = emptyMap(),
@@ -40,7 +37,7 @@ public class IntegrityReport(
             depth = depth,
             generatedAtMillis = System.currentTimeMillis(),
             sdkVersion = SDK_VERSION,
-            reportId = UUID.randomUUID().toString(),
+            reportId = UUID.randomUUID().toString()
         )
     }
 }
