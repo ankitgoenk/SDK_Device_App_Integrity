@@ -35,7 +35,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew detekt ktlintCheck
+      # --no-configuration-cache: the ktlint Gradle plugin (12.2.0) holds a Project
+      # reference in its task state, which the configuration cache cannot serialize
+      # (124 problems). Scoped to this job so the cache still benefits the real build.
+      - run: ./gradlew detekt ktlintCheck --no-configuration-cache
 
   api:
     name: Public API compatibility

@@ -43,7 +43,7 @@ public abstract interface class io/integrity/core/DetectionContext {
 public abstract interface class io/integrity/core/Detector {
 	public static final field Companion Lio/integrity/core/Detector$Companion;
 	public abstract fun detect (Lio/integrity/core/DetectionContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun getBudget-UwyO8pc ()J
+	public fun getBudget-UwyO8pc ()J
 	public abstract fun getCategory ()Lio/integrity/core/Category;
 	public abstract fun getId ()Ljava/lang/String;
 	public abstract fun getMinDepth ()Lio/integrity/core/Depth;
@@ -51,10 +51,6 @@ public abstract interface class io/integrity/core/Detector {
 
 public final class io/integrity/core/Detector$Companion {
 	public final fun getDEFAULT_BUDGET-UwyO8pc ()J
-}
-
-public final class io/integrity/core/Detector$DefaultImpls {
-	public static fun getBudget-UwyO8pc (Lio/integrity/core/Detector;)J
 }
 
 public final class io/integrity/core/IntegrityConfig {

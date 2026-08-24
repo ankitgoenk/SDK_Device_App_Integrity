@@ -40,7 +40,7 @@ allprojects {
 
 tasks.register("qualityCheck") {
     group = "verification"
-    description = "Runs the static-analysis gates that CI enforces."
+    description = "Runs the static-analysis gates that CI enforces. Use --no-configuration-cache."
     dependsOn(subprojects.map { "${it.path}:detekt" })
     dependsOn(subprojects.map { "${it.path}:ktlintCheck" })
 }
