@@ -35,11 +35,18 @@ class AarConsumerTest {
     fun evaluateAnswersAcrossTheAarBoundary() = runBlocking {
         val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
 
-        // The detector families are still empty (phases 2-7), so nothing was applicable
-        // and coverage is zero. The SDK must therefore say UNKNOWN, never TRUSTED: a
-        // report with no coverage is not evidence that the device is clean.
-        assertEquals(0f, report.coverage, 0f)
-        assertEquals(Verdict.UNKNOWN, report.verdict)
+        // The root detectors arrive from a published AAR, so this proves detection code —
+        // not just the API surface — survives packaging and R8's consumer rules.
+        assertTrue("root detectors from the AAR should have run", report.coverage > 0f)
         assertTrue(report.reportId.isNotEmpty())
+    }
+
+    @Test
+    fun signalsFromTheAarCannotEnforceAnything() = runBlocking {
+        val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
+
+        // Hard rule 6 holds across the artifact boundary too.
+        assertEquals(0, report.riskScore)
+        assertEquals(Verdict.TRUSTED, report.verdict)
     }
 }

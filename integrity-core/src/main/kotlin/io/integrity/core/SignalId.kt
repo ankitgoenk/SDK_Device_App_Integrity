@@ -28,6 +28,17 @@ public value class SignalId(public val value: String) {
         /** Host misconfiguration, e.g. no signing pin supplied. */
         public val META_CONFIG_INVALID: SignalId = SignalId("META_CONFIG_INVALID")
 
+        // --- ROOT (phase 2) ---------------------------------------------------------
+
+        /** A `su` or related binary exists in a world-readable system location. */
+        public val ROOT_SU_BINARY: SignalId = SignalId("ROOT_SU_BINARY")
+
+        /** A known root-manager application is installed and visible to us. */
+        public val ROOT_MANAGER_PACKAGE: SignalId = SignalId("ROOT_MANAGER_PACKAGE")
+
+        /** The build advertises itself as a debug/test-signed build. */
+        public val ROOT_DANGEROUS_PROPS: SignalId = SignalId("ROOT_DANGEROUS_PROPS")
+
         // --- Referenced by the scorer's escalation rules ahead of their detectors ------
         // These are decisive on their own, so the scoring model names them directly.
         // Their detectors arrive in phases 4 and 7.

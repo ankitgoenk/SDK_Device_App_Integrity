@@ -73,13 +73,32 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 > device. The `QUICK` timing target is **not** measured yet — that needs the macrobenchmark
 > from phase 9, and there is no point benchmarking an engine with no real detectors in it.
 
-### Phase 2 — Root & privileged-environment detection *(1 week)*
+### Phase 2 — Root & privileged-environment detection *(1 week)* — **IN PROGRESS**
 Signals `ROOT_*` in [DETECTION_CATALOG.md](DETECTION_CATALOG.md#1-root--privileged-environment).
 Covers su/busybox/Magisk/KernelSU/APatch artefacts, manager packages, dangerous
 properties, SELinux state, verified-boot state, mount-table anomalies, and native
 `__system_property_get` vs. `getprop` divergence (resetprop detection).
 - **Exit:** true positive on Magisk (with DenyList on and off) and KernelSU test devices;
   zero positives across the clean-device matrix in [TESTING.md](TESTING.md).
+
+> **Status.** First slice landed: `ROOT_SU_BINARY`, `ROOT_MANAGER_PACKAGE` and
+> `ROOT_DANGEROUS_PROPS`, JVM layer only, 22 unit tests, each with a catalog row stating
+> technique, false-positive risk and known bypass (enforced by CI).
+>
+> Be clear about what this buys: **all three are defeated by a hidden Magisk install.**
+> DenyList unmounts the artefacts, the manager repackages under a random name, and
+> `resetprop` rewrites the build tags. They catch careless setups and generate shadow-mode
+> evidence; they are not a root check anyone should enforce on. The signals with teeth —
+> mount-table divergence, property spoofing, verified-boot state — need the native core in
+> phase 3, and the authoritative answer is Play Integrity server-side in phase 7.
+>
+> All three ship at `INFORMATIONAL` per hard rule 6, so they contribute nothing to the score
+> until a host opts in via `RootDetectors.proposedWeights(policy)`. An instrumented test
+> asserts that end-to-end.
+>
+> Still open for phase 2: property/mount signals, `ROOT_KERNELSU`, `ROOT_APATCH`,
+> `ROOT_SELINUX_PERMISSIVE`, `ROOT_RW_SYSTEM`, `ROOT_UID_ZERO`, and the rooted-device test
+> rigs from [TESTING.md](TESTING.md), which no CI emulator can substitute for.
 
 ### Phase 3 — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
 Signals `HOOK_*`. JVM layer (stack-trace probes, Xposed classes/artefacts, `TracerPid`,

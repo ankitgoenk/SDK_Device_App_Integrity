@@ -4,7 +4,11 @@ Every signal the SDK can emit. Each entry has a **stable `SignalId`** — IDs ar
 never renamed. CI enforces that every `SignalId` in code has an entry here.
 
 **Columns**
-- **Weight** — default contribution to the category subscore (see [RISK_SCORING.md](RISK_SCORING.md)). `H`=high (25), `M`=medium (12), `L`=low (5), `I`=informational (0).
+- **Weight** — the *proposed* contribution to the category subscore (see
+  [RISK_SCORING.md](RISK_SCORING.md)). `H`=high (25), `M`=medium (12), `L`=low (5),
+  `I`=informational (0). **Implemented signals ship at `INFORMATIONAL` regardless**, per
+  hard rule 6, until shadow-mode data justifies promotion; the tabled weight is what a host
+  opts into (e.g. `RootDetectors.proposedWeights(policy)`).
 - **FP** — false-positive risk: `low` / `med` / `high`.
 - **Layer** — `JVM`, `NAT` (native), `SRV` (server-verified).
 
@@ -14,12 +18,12 @@ never renamed. CI enforces that every `SignalId` in code has an entry here.
 
 | SignalId | Technique | Layer | Weight | FP | Notes / known bypass |
 | --- | --- | --- | --- | --- | --- |
-| `ROOT_SU_BINARY` | Stat `su`, `busybox`, `magisk`, `supolicy`, `daemonsu` across `PATH` + `/sbin`, `/system/xbin`, `/system/bin`, `/vendor/bin`, `/data/local/{tmp,bin}`, `/su/bin` | NAT | H | low | Magisk DenyList hides paths from the app's mount namespace; renamed binaries |
-| `ROOT_MAGISK_PATHS` | `/data/adb/magisk`, `/data/adb/modules`, `/sbin/.magisk`, `/cache/.disable_magisk`, `.overlay.d` | NAT | H | low | Hidden under DenyList; use with mount-anomaly signal |
+| `ROOT_SU_BINARY` | **Implemented (JVM, phase 2).** Stat `su`, `magisk` and `busybox` in world-readable system paths (`/system/{bin,xbin,sbin}`, `/vendor/bin`, `/product/bin`). `/data/adb`, `/sbin` and `/su` are *not* statable by an unprivileged app, so probing them would only add checks that always answer "no" | JVM | H | low | Trivial to evade: Magisk DenyList unmounts artefacts from the app's namespace, and binaries are easily renamed. Catches sloppy and legacy setups only; the native mount/property checks in phase 3 and Play Integrity carry the real weight |
+| `ROOT_MAGISK_PATHS` | Planned (phase 3, native). **Note:** the obvious form of this check is not achievable from an app — `/data/adb/**` and `/sbin/**` are unreadable at the app's UID whether probed from Kotlin or native, so a literal path-stat version would always answer "no". Real coverage comes from mount-table divergence and property spoofing instead | NAT | H | low | Hidden under DenyList by design; only the namespace/mount comparison sees through it |
 | `ROOT_KERNELSU` | `/data/adb/ksu`, `/data/adb/ksud`, KernelSU manager `prctl` probe, kernel-version string anomalies | NAT | H | low | KernelSU deliberately leaves fewer userspace traces than Magisk |
 | `ROOT_APATCH` | `/data/adb/ap`, APatch manager artefacts, kpatch markers | NAT | H | low | Newer; keep list updated |
-| `ROOT_MANAGER_PACKAGE` | Presence of known root-manager packages (`com.topjohnwu.magisk`, `me.weishu.kernelsu`, `eu.chainfire.supersu`, `com.koushikdutta.superuser`, …) | JVM | M | low | Magisk supports repackaging the manager under a random package name — treat absence as no evidence |
-| `ROOT_DANGEROUS_PROPS` | `ro.debuggable=1`, `ro.secure=0`, `ro.build.type=userdebug/eng`, `ro.build.tags` contains `test-keys`, `service.adb.root=1` | NAT | M | med | Some OEM/China ROMs and TV boxes legitimately ship `test-keys` |
+| `ROOT_MANAGER_PACKAGE` | **Implemented (JVM, phase 2).** Query the curated manager list through declared `<queries>`; report hashed package digests only. On API 30+ absence is reported `INCONCLUSIVE`, since filtering makes "not installed" and "not visible" identical | JVM | M | low | Magisk repackages its manager under a random name, which defeats a fixed list outright; uninstalling the manager while keeping root also defeats it. A hit is evidence, a miss is not |
+| `ROOT_DANGEROUS_PROPS` | **Partly implemented (JVM, phase 2):** `Build.TAGS` contains `test-keys`, `Build.TYPE` in {`userdebug`,`eng`}. The `ro.debuggable` / `ro.secure` / `service.adb.root` reads need the native property API (phase 3) | JVM+NAT | L | **high** | `resetprop` rewrites all of these in seconds and hiding modules do so by default. Only the native comparison against on-disk values (`ROOT_PROP_SPOOF`) sees through it |
 | `ROOT_PROP_SPOOF` | Compare `__system_property_get` against `/system/build.prop` + `getprop` output; divergence indicates `resetprop` | NAT | H | low | Strong signal against property spoofing; needs careful parsing |
 | `ROOT_VERIFIED_BOOT` | `ro.boot.verifiedbootstate != green`, `ro.boot.flash.locked != 1`, `ro.boot.veritymode != enforcing` | NAT | H | med | Spoofable via resetprop — pair with `ROOT_PROP_SPOOF`; authoritative version comes from Play Integrity (`SRV`) |
 | `ROOT_SELINUX_PERMISSIVE` | Read `/sys/fs/selinux/enforce` | NAT | M | low | Also faked by some hiding modules |

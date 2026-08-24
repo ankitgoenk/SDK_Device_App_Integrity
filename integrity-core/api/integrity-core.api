@@ -194,6 +194,9 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getMETA_DETECTOR_ERROR-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_TIMEOUT-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_NATIVE_UNAVAILABLE-isIsmlw ()Ljava/lang/String;
+	public final fun getROOT_DANGEROUS_PROPS-isIsmlw ()Ljava/lang/String;
+	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;
+	public final fun getROOT_SU_BINARY-isIsmlw ()Ljava/lang/String;
 }
 
 public final class io/integrity/core/Verdict : java/lang/Enum {
