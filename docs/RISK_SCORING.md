@@ -48,6 +48,13 @@ category cannot be inflated by piling on correlated low-value signals.
 
 These express "some things are decisive regardless of the arithmetic".
 
+**A stronger layer is not a stronger mandate.** A native or attestation-backed check is
+better evidence than a JVM one — harder to hook, harder to spoof. It is not thereby
+entitled to block anyone. Every detection signal ships `INFORMATIONAL` whichever layer
+produced it, and promotion comes from shadow-mode data, not from the implementation being
+clever. Confusing evidential strength with enforcement authority is how integrity SDKs end
+up locking out real users.
+
 **An escalation never outranks the weight.** A signal still shipping at `INFORMATIONAL`
 cannot fire an escalation, even when an escalation rule names it. Without that gate,
 hard rule 6 — new signals ship `INFORMATIONAL` until shadow-mode data justifies promotion —

@@ -49,6 +49,12 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 > `Finished 3 tests`, so the SDK demonstrably initialises and answers on a real Android 14
 > runtime.
 >
+> **Evidential strength is not enforcement authority.** Later phases make signals harder to
+> bypass; they do not make them fit to block a user. Every detection signal ships
+> `INFORMATIONAL` regardless of which layer produced it, and only shadow-mode data plus
+> server-side re-scoring promote it. A native check is better *evidence* than a JVM one —
+> it is not permission to act on that evidence.
+>
 > Getting there took four rounds, each a distinct real defect rather than a flake:
 > a missing API baseline; a ktlint code-style mismatch plus five detekt findings; an AAPT
 > failure from referencing a Material Components XML theme the sample does not depend on;
@@ -100,7 +106,46 @@ properties, SELinux state, verified-boot state, mount-table anomalies, and nativ
 > `ROOT_SELINUX_PERMISSIVE`, `ROOT_RW_SYSTEM`, `ROOT_UID_ZERO`, and the rooted-device test
 > rigs from [TESTING.md](TESTING.md), which no CI emulator can substitute for.
 
-### Phase 3 — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
+### Phase 2 leftovers
+
+- [ ] `integrity-detector-root` has no direct positive instrumented control: the
+      dirty-image direction is currently proven only via `sample-app`. Give the module its
+      own self-contained pair (clean image → no signal, dirty image → expected signal) with
+      the next root slice, so the detector's test suite does not depend on another module
+      to show it works.
+
+### Phase 3a — Native walking skeleton *(2–3 days)* — **do this before any detection code**
+
+The temptation is to open `integrity-native` and write four thousand lines of anti-Frida
+machinery before finding out whether the `.so` even loads on a consumer's device. This
+phase exists to stop that. It ships **one trivial native function** and proves the whole
+delivery path around it.
+
+Exit criteria — every one of these is a CI assertion, not a manual check:
+
+1. NDK build succeeds for `arm64-v8a`, `armeabi-v7a` and `x86_64`.
+2. The AAR packages the `.so` for every ABI.
+3. The emulator loads it and the JNI call returns a value.
+4. That value reaches the Kotlin engine as a real `Signal`.
+5. R8 with the shipped consumer rules does not break loading.
+6. `sample-consumer` loads it from the **published AAR**, not a project dependency.
+7. Deliberately breaking the load produces `META_NATIVE_UNAVAILABLE` and
+   `Confidence.INCONCLUSIVE` — never a silent "clean".
+8. A native failure cannot crash the host: the JNI entry point is wrapped and a forced
+   failure is exercised on-device.
+9. `nm`/`readelf` confirm the release `.so` is stripped and exports no `Java_io_integrity_*`
+   symbols, so the ADR-0002 claim is tested rather than asserted.
+10. Per-ABI `.so` size is within the budget recorded in phase 9 (≤ 250 KB).
+
+**Decision this phase must settle:** `META_NATIVE_UNAVAILABLE` currently carries `HIGH`
+weight and a score floor of 50. It is inert today because no native library ships. The
+moment one does, every device where the `.so` fails to load — unusual ABI, aggressive
+repackaging tooling, `extractNativeLibs` interactions — becomes `SUSPICIOUS`. Before
+enabling the native module by default, measure how often loading genuinely fails and decide
+whether that weight survives contact with real devices. This is the one place where the
+SDK's own robustness problem masquerades as a device-integrity signal.
+
+### Phase 3b — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
 Signals `HOOK_*`. JVM layer (stack-trace probes, Xposed classes/artefacts, `TracerPid`,
 debugger flags) plus the **native** layer: `/proc/self/maps` and thread-name scanning,
 Frida port/handshake probe, memory scan for agent fingerprints, function-prologue and
@@ -185,7 +230,8 @@ documentation review.
 | 0 | Scaffold | 3–5 d | — |
 | 1 | Core engine + API | 1–2 w | 0 |
 | 2 | Root detection | 1 w | 1 |
-| 3 | Hooking / Frida | 2–3 w | 1 |
+| 3a | Native walking skeleton | 2–3 d | 1 |
+| 3b | Hooking / Frida | 2–3 w | 3a |
 | 4 | App tamper | 1 w | 1 |
 | 5 | Hostile apps / environment | 1 w | 1 |
 | 6 | Emulator / virtual space | 1 w | 1 |
