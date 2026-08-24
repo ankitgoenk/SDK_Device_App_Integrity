@@ -202,10 +202,16 @@ with 3).
 - [x] `./gradlew build` verified green in CI
 - [x] Committed `api/*.api` surface, enforced by `apiCheck`
 - [x] Instrumented smoke test executing on an emulator (3 tests, API 34)
-- [ ] `sample-consumer`: consume a **published AAR** from a local Maven repo rather than
-      `project(...)`, so AAR packaging, consumer ProGuard rules, manifest merging and the
-      ADR-0004 `<queries>` fragment are exercised. Phase 0 is not closed until this exists
-- [ ] Issue templates
+- [x] `sample-consumer`: consumes a **published AAR** from a local Maven repo, exercising
+      AAR packaging, consumer ProGuard rules under R8, manifest merging and the ADR-0004
+      `<queries>` fragment — with CI asserting `QUERY_ALL_PACKAGES` never appears
+- [x] Evidence-chain CI gate (`tools/check-signal-catalog.py`)
+- [ ] Issue templates (deferred; not a phase 0 blocker)
+
+**Phase 0 is closed.** Run 7 of CI on PR #1 was green across all six jobs, with
+`Starting 4 tests` / `Starting 3 tests` on an Android 14 emulator for `sample-app` and
+`sample-consumer` respectively — so both the project-dependency and published-AAR paths are
+verified on a real runtime, not merely built.
 
 ### Phase 1
 - [x] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`

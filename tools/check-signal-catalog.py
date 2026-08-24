@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
-"""Fail the build when code and docs/DETECTION_CATALOG.md disagree about signal ids.
+"""Enforce the evidence chain every detection signal must carry.
 
-A signal that exists in code but not in the catalog has no documented technique, weight,
-false-positive analysis or known bypass — which is exactly the review this project refuses
-to skip. A catalogued id with no implementation is a promise we are not keeping, so it must
-be marked as planned rather than silently listed.
+A signal is only as trustworthy as what is known about it. For each SignalId that exists
+in production code this checks:
 
-Usage: tools/check-signal-catalog.py [--allow-unimplemented]
+  1. it has a row in docs/DETECTION_CATALOG.md               (Signal -> Evidence)
+  2. that row states a false-positive risk                   (False-positive analysis)
+  3. that row states the technique and a known bypass        (Known bypass)
+  4. at least one unit test references it by name            (Unit test)
+
+Expected result, evidence shape and "instrumented test where appropriate" stay with human
+review: a checker that guessed at those would only teach people how to satisfy the checker.
+
+META_* rows describe the SDK's own state rather than the device's, so they carry no
+false-positive or bypass analysis — there is nothing about the user's device to get wrong.
+
+Usage: tools/check-signal-catalog.py
 """
 from __future__ import annotations
 
@@ -17,52 +26,95 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "docs" / "DETECTION_CATALOG.md"
 
-# public val ROOT_SU_BINARY: SignalId = SignalId("ROOT_SU_BINARY")
 CODE_ID = re.compile(r'SignalId\(\s*"([A-Z][A-Z0-9_]+)"\s*\)')
-# | `ROOT_SU_BINARY` | ... |
-CATALOG_ID = re.compile(r'^\|\s*`([A-Z][A-Z0-9_]+)`\s*\|', re.MULTILINE)
+TABLE_ROW = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
+
+# Placeholder text that satisfies the letter of a column but not its purpose.
+PLACEHOLDERS = {"", "-", "--", "tbd", "todo", "n/a", "na", "?", "tba", "none"}
 
 # Ids that exist only to describe the scaffold itself.
-EXEMPT = {"META_ENGINE_NOT_IMPLEMENTED"}
+EXEMPT: set[str] = set()
+
+
+def is_placeholder(cell: str) -> bool:
+    return cell.strip().strip("`*_").lower() in PLACEHOLDERS
 
 
 def code_ids() -> set[str]:
     found: set[str] = set()
     for path in ROOT.rglob("*.kt"):
-        if "/build/" in str(path) or "/src/test/" in str(path):
+        parts = str(path)
+        if "/build/" in parts or "/src/test/" in parts or "/src/androidTest/" in parts:
             continue
         found |= set(CODE_ID.findall(path.read_text(encoding="utf-8")))
     return found - EXEMPT
 
 
-def catalog_ids() -> set[str]:
-    return set(CATALOG_ID.findall(CATALOG.read_text(encoding="utf-8")))
+def test_ids() -> set[str]:
+    found: set[str] = set()
+    for path in ROOT.rglob("*.kt"):
+        if "/src/test/" not in str(path):
+            continue
+        text = path.read_text(encoding="utf-8")
+        found |= set(re.findall(r"\b([A-Z][A-Z0-9_]{3,})\b", text))
+    return found
+
+
+def catalog_rows() -> dict[str, list[str]]:
+    rows: dict[str, list[str]] = {}
+    for match in TABLE_ROW.finditer(CATALOG.read_text(encoding="utf-8")):
+        cells = [c.strip() for c in match.group(1).split("|")]
+        if not cells:
+            continue
+        name = cells[0].strip("`")
+        if re.fullmatch(r"[A-Z][A-Z0-9_]+", name):
+            rows[name] = cells
+    return rows
 
 
 def main() -> int:
-    allow_unimplemented = "--allow-unimplemented" in sys.argv
-
     in_code = code_ids()
-    in_docs = catalog_ids()
+    rows = catalog_rows()
+    tested = test_ids()
 
-    undocumented = sorted(in_code - in_docs)
-    unimplemented = sorted(in_docs - in_code)
+    problems: list[str] = []
 
-    if undocumented:
-        print("FAIL: signal ids in code with no docs/DETECTION_CATALOG.md entry:")
-        for name in undocumented:
-            print(f"  - {name}")
-        print("\nAdd a row with technique, layer, weight, FP risk and known bypass.")
+    for name in sorted(in_code):
+        row = rows.get(name)
+        if row is None:
+            problems.append(
+                f"{name}: no row in docs/DETECTION_CATALOG.md. "
+                f"Add technique, layer, weight, false-positive risk and known bypass."
+            )
+            continue
 
-    if unimplemented and not allow_unimplemented:
-        print(f"\nNote: {len(unimplemented)} catalogued id(s) not yet implemented "
-              f"(expected while phases 2-7 are outstanding).")
+        # A six-column detector row: SignalId | Technique | Layer | Weight | FP | Notes.
+        if len(row) >= 6:
+            if is_placeholder(row[4]):
+                problems.append(f"{name}: catalog row states no false-positive risk.")
+            if is_placeholder(row[5]):
+                problems.append(
+                    f"{name}: catalog row states no notes / known bypass. "
+                    f"If you cannot defeat it, say why."
+                )
+            if is_placeholder(row[1]):
+                problems.append(f"{name}: catalog row states no detection technique.")
 
-    if undocumented:
+        if name not in tested:
+            problems.append(f"{name}: no unit test references it by name.")
+
+    if problems:
+        print("FAIL: the detection evidence chain is incomplete.\n")
+        for problem in problems:
+            print(f"  - {problem}")
+        print("\nSee CONTRIBUTING.md, 'Definition of done for a detector'.")
         return 1
 
-    print(f"OK: {len(in_code)} implemented id(s), all catalogued; "
-          f"{len(unimplemented)} still planned.")
+    planned = sorted(set(rows) - in_code)
+    print(
+        f"OK: {len(in_code)} implemented signal(s), each catalogued, "
+        f"risk-analysed and unit-tested; {len(planned)} still planned."
+    )
     return 0
 
 

@@ -25,9 +25,6 @@ public value class SignalId(public val value: String) {
         /** Native library missing or failed self-check — a common bypass, so it scores high. */
         public val META_NATIVE_UNAVAILABLE: SignalId = SignalId("META_NATIVE_UNAVAILABLE")
 
-        /** Package visibility denied, so ENV_* results are incomplete. */
-        public val META_VISIBILITY_RESTRICTED: SignalId = SignalId("META_VISIBILITY_RESTRICTED")
-
         /** Host misconfiguration, e.g. no signing pin supplied. */
         public val META_CONFIG_INVALID: SignalId = SignalId("META_CONFIG_INVALID")
 

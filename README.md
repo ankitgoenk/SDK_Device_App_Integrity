@@ -13,7 +13,7 @@ A modular, Kotlin-first Android SDK that answers two questions for the host app 
 The SDK produces an **evidence-based report**, not a boolean. The host app — and ideally the
 host's **backend** — decides what to do with it.
 
-> **Status:** phase 0 complete and green in CI; phase 1 (detection engine, scoring, policy,
+> **Status:** phase 0 **closed** (six-job CI green, verified on an Android 14 emulator via both a project dependency and a published AAR); phase 1 (detection engine, scoring, policy,
 > cache) implemented and unit-tested. **No detectors yet** — every signal family lands in
 > phases 2–7, so `evaluate()` currently reports `UNKNOWN` with zero coverage on a real
 > integration. See [docs/PLAN.md](docs/PLAN.md). Detectors land in phases 2–7 and every `evaluate()` currently

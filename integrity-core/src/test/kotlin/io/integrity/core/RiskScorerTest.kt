@@ -99,6 +99,15 @@ class RiskScorerTest {
     }
 
     @Test
+    fun `an unrecognised app per attestation is decisive on its own`() {
+        val result = score(
+            listOf(Signal(SignalId.ATT_APP_NOT_RECOGNISED, Category.ATTESTATION, Confidence.CONFIRMED))
+        )
+
+        assertThat(result.verdict).isEqualTo(Verdict.COMPROMISED)
+    }
+
+    @Test
     fun `a missing native library is suspicious with a score floor`() {
         val result = score(
             listOf(Signal(SignalId.META_NATIVE_UNAVAILABLE, Category.META, Confidence.CONFIRMED))
