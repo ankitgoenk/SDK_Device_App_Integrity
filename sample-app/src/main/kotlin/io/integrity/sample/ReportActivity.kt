@@ -62,7 +62,7 @@ private fun ReportScreen() {
 
         Text(text = "Signals (${report.signals.size})", style = MaterialTheme.typography.titleMedium)
         if (report.signals.isEmpty()) {
-            Text(text = "No signals — detectors land in phases 2-7 (see docs/PLAN.md).")
+            Text(text = "No signals. Detector families land in phases 2-7 (see docs/PLAN.md).")
         } else {
             report.signals.forEach { signal ->
                 Text(text = "• ${signal.id} [${signal.category}/${signal.confidence}] ${signal.evidence}")

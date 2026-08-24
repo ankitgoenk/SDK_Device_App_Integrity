@@ -56,7 +56,7 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 > plugin's configuration-cache incompatibility. Two of those were only reachable by running
 > a real Android build, and one only by running the real Gradle plugins.
 
-### Phase 1 — Core engine and public API *(1–2 weeks)*
+### Phase 1 — Core engine and public API *(1–2 weeks)* — **DONE**
 - Data model: `Signal`, `SignalId`, `Category`, `Confidence`, `Evidence`, `IntegrityReport`,
   `Verdict`. See [API_DESIGN.md](API_DESIGN.md).
 - `Detector` SPI + `DetectionEngine`: parallel execution, per-detector timeout, crash
@@ -66,6 +66,12 @@ support from Phase 3. Phases 2–6 are largely parallelisable across two enginee
 - `ReportSink` SPI; in-memory and logcat sinks for development.
 - **Exit:** engine runs 3 fake detectors, scoring is unit-tested to 90%+, `QUICK` pass
   measured under 20 ms on a mid-tier device.
+
+> **Status.** Engine, scoring, policy and cache are implemented and covered by 38 unit
+> tests (17 of them on the scorer alone, one per documented rule). The instrumented tests
+> confirm the engine dispatches a registered detector and reports full coverage on a real
+> device. The `QUICK` timing target is **not** measured yet — that needs the macrobenchmark
+> from phase 9, and there is no point benchmarking an engine with no real detectors in it.
 
 ### Phase 2 — Root & privileged-environment detection *(1 week)*
 Signals `ROOT_*` in [DETECTION_CATALOG.md](DETECTION_CATALOG.md#1-root--privileged-environment).
@@ -202,13 +208,15 @@ with 3).
 - [ ] Issue templates
 
 ### Phase 1
-- [ ] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`
-- [ ] `Detector` SPI: `id`, `category`, `depth`, `cost`, `suspend fun detect(ctx): List<Signal>`
-- [ ] `DetectionEngine`: parallel dispatch, per-detector timeout, `runCatching` isolation
-- [ ] `ReportCache` with TTL + invalidation on process/lifecycle events
-- [ ] `Policy` + `RiskScorer` + `Verdict`
-- [ ] `IntegrityGuard` facade, thread-safe init, idempotent
-- [ ] Java interop check (`@JvmStatic`, callback variant of the suspend API)
+- [x] `Signal`, `SignalId` (stable string IDs, never renumbered), `Category`, `Confidence`
+- [x] `Detector` SPI: `id`, `category`, `minDepth`, `budget`, `suspend fun detect(ctx)`
+- [x] `DetectionEngine`: parallel dispatch, per-detector timeout, crash isolation
+- [x] `ReportCache` with per-depth TTL
+- [x] `Policy` + `Weight` + `RiskScorer` + `Verdict`, incl. every documented escalation rule
+- [x] `IntegrityGuard` facade, thread-safe init, idempotent, `reports()` flow
+- [ ] Cache invalidation on package-changed / foreground-after-gap events
+- [ ] Java interop check (callback variant of the suspend API, `Cancellable`)
+- [ ] `QUICK` pass measured under 20 ms (needs the phase 9 macrobenchmark)
 
 ### Phase 2–6
 - [ ] One PR per signal family, each with: implementation, unit tests, an instrumented test,

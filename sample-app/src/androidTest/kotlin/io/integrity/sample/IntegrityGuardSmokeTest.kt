@@ -3,7 +3,6 @@ package io.integrity.sample
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.Depth
 import io.integrity.core.IntegrityGuard
-import io.integrity.core.SignalId
 import io.integrity.core.Verdict
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -12,12 +11,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The end-to-end check phase 0 exists to prove: the SDK is initialised by a real
- * Application on a real Android runtime, and the public API answers.
- *
- * It deliberately asserts the *scaffold's* behaviour — UNKNOWN plus
- * META_ENGINE_NOT_IMPLEMENTED — so it fails loudly when the phase 1 engine lands and
- * someone forgets to update it.
+ * The end-to-end check phase 0 exists to prove, now running against the phase 1 engine:
+ * the SDK is initialised by a real Application on a real Android runtime, the engine
+ * dispatches the registered detectors, and scoring produces a verdict.
  */
 @RunWith(AndroidJUnit4::class)
 class IntegrityGuardSmokeTest {
@@ -28,20 +24,30 @@ class IntegrityGuardSmokeTest {
     }
 
     @Test
-    fun evaluateReturnsUnknownWhileTheEngineIsAScaffold() = runBlocking {
+    fun engineDispatchesTheRegisteredDetector() = runBlocking {
         val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
 
-        assertEquals(Verdict.UNKNOWN, report.verdict)
+        // HostDetector is the only registered detector and it concludes cleanly, so the
+        // engine must report full coverage — the value that says a clean report means
+        // something. Anything less would mean the detector never ran.
+        assertEquals(1f, report.coverage, 0f)
+        assertTrue("a clean sweep should not invent signals", report.signals.isEmpty())
         assertEquals(0, report.riskScore)
-        assertEquals(0f, report.coverage, 0f)
-        assertTrue(report.hasSignal(SignalId.META_ENGINE_NOT_IMPLEMENTED))
+        assertEquals(Verdict.TRUSTED, report.verdict)
+    }
+
+    @Test
+    fun repeatedEvaluationIsServedFromCache() = runBlocking {
+        val first = IntegrityGuard.evaluate(Depth.FULL, force = true)
+        val second = IntegrityGuard.evaluate(Depth.FULL)
+
+        assertEquals(first.reportId, second.reportId)
     }
 
     @Test
     fun currentReportIsSafeToCallOnAnyThread() {
         val report = IntegrityGuard.currentReport()
 
-        assertEquals(Verdict.UNKNOWN, report.verdict)
         assertTrue(report.reportId.isNotEmpty())
     }
 }

@@ -55,12 +55,14 @@ public final class io/integrity/core/Detector$Companion {
 
 public final class io/integrity/core/IntegrityConfig {
 	public static final field Companion Lio/integrity/core/IntegrityConfig$Companion;
-	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/List;Lio/integrity/core/ReportSink;Ljava/util/Set;JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/List;Lio/integrity/core/ReportSink;Ljava/util/Set;JLio/integrity/core/Policy;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAllowlistedPackages ()Ljava/util/Set;
+	public final fun getCacheTtls ()Ljava/util/Map;
 	public final fun getDetectorBudget-UwyO8pc ()J
 	public final fun getDetectors ()Ljava/util/List;
 	public final fun getExpectedPackageName ()Ljava/lang/String;
 	public final fun getExpectedSigningCertSha256 ()Ljava/util/Set;
+	public final fun getPolicy ()Lio/integrity/core/Policy;
 	public final fun getSink ()Lio/integrity/core/ReportSink;
 }
 
@@ -69,10 +71,12 @@ public final class io/integrity/core/IntegrityConfig$Builder {
 	public final fun addDetector (Lio/integrity/core/Detector;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun allowlistPackages ([Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun build ()Lio/integrity/core/IntegrityConfig;
+	public final fun cacheTtl-HG0u8IE (Lio/integrity/core/Depth;J)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun detectorBudget-LRDsOJo (J)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun detectors (Ljava/util/List;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun expectedPackageName (Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun expectedSigningCertSha256 ([Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun policy (Lio/integrity/core/Policy;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun reportSink (Lio/integrity/core/ReportSink;)Lio/integrity/core/IntegrityConfig$Builder;
 }
 
@@ -87,6 +91,7 @@ public final class io/integrity/core/IntegrityGuard {
 	public static synthetic fun evaluate$default (Lio/integrity/core/IntegrityGuard;Lio/integrity/core/Depth;ZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public static final fun initialize (Landroid/content/Context;Lio/integrity/core/IntegrityConfig;)V
 	public static final fun isInitialized ()Z
+	public final fun reports ()Lkotlinx/coroutines/flow/Flow;
 	public static final fun shutdown ()V
 }
 
@@ -117,6 +122,35 @@ public final class io/integrity/core/LogcatSink : io/integrity/core/ReportSink {
 	public fun <init> (Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun onReport (Lio/integrity/core/IntegrityReport;)V
+}
+
+public final class io/integrity/core/Policy {
+	public static final field Companion Lio/integrity/core/Policy$Companion;
+	public synthetic fun <init> (Ljava/util/Map;Ljava/util/Set;Ljava/util/Map;IIIFZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public static final fun balanced ()Lio/integrity/core/Policy;
+	public static final fun gaming ()Lio/integrity/core/Policy;
+	public final fun getAdvisoryOnly ()Z
+	public final fun getCompromisedThreshold ()I
+	public final fun getLowRiskThreshold ()I
+	public final fun getMinimumCoverage ()F
+	public final fun getSuspiciousThreshold ()I
+	public final fun isDisabled-ZzZ-_2s (Ljava/lang/String;)Z
+	public static final fun observability ()Lio/integrity/core/Policy;
+	public static final fun strict ()Lio/integrity/core/Policy;
+	public final fun weightOf-ZzZ-_2s (Ljava/lang/String;)Lio/integrity/core/Weight;
+	public final fun withCategoryFactor (Lio/integrity/core/Category;D)Lio/integrity/core/Policy;
+	public final fun withDisabled (Ljava/util/Collection;)Lio/integrity/core/Policy;
+	public final fun withDisabled-ZzZ-_2s (Ljava/lang/String;)Lio/integrity/core/Policy;
+	public final fun withThresholds (III)Lio/integrity/core/Policy;
+	public static synthetic fun withThresholds$default (Lio/integrity/core/Policy;IIIILjava/lang/Object;)Lio/integrity/core/Policy;
+	public final fun withWeight-9fUCPOI (Ljava/lang/String;Lio/integrity/core/Weight;)Lio/integrity/core/Policy;
+}
+
+public final class io/integrity/core/Policy$Companion {
+	public final fun balanced ()Lio/integrity/core/Policy;
+	public final fun gaming ()Lio/integrity/core/Policy;
+	public final fun observability ()Lio/integrity/core/Policy;
+	public final fun strict ()Lio/integrity/core/Policy;
 }
 
 public abstract interface class io/integrity/core/ReportSink {
@@ -153,10 +187,12 @@ public final class io/integrity/core/SignalId {
 }
 
 public final class io/integrity/core/SignalId$Companion {
+	public final fun getAPP_DEX_DIGEST_MISMATCH-isIsmlw ()Ljava/lang/String;
+	public final fun getAPP_SIGNATURE_MISMATCH-isIsmlw ()Ljava/lang/String;
+	public final fun getATT_APP_NOT_RECOGNISED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_CONFIG_INVALID-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_ERROR-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_TIMEOUT-isIsmlw ()Ljava/lang/String;
-	public final fun getMETA_ENGINE_NOT_IMPLEMENTED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_NATIVE_UNAVAILABLE-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_VISIBILITY_RESTRICTED-isIsmlw ()Ljava/lang/String;
 }
@@ -170,5 +206,16 @@ public final class io/integrity/core/Verdict : java/lang/Enum {
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Verdict;
 	public static fun values ()[Lio/integrity/core/Verdict;
+}
+
+public final class io/integrity/core/Weight : java/lang/Enum {
+	public static final field HIGH Lio/integrity/core/Weight;
+	public static final field INFORMATIONAL Lio/integrity/core/Weight;
+	public static final field LOW Lio/integrity/core/Weight;
+	public static final field MEDIUM Lio/integrity/core/Weight;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getPoints ()I
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Weight;
+	public static fun values ()[Lio/integrity/core/Weight;
 }
 

@@ -13,6 +13,9 @@ complexity:
     thresholdInObjects: 15
 
 style:
+  MagicNumber:
+    # Enum payloads (e.g. Weight.HIGH(25)) are the definition of the constant, not a use.
+    ignoreEnums: true
   MaxLineLength:
     maxLineLength: 120
   ReturnCount:

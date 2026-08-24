@@ -1,16 +1,23 @@
 package io.integrity.core
 
 import android.content.Context
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * SDK entry point.
  *
- * Phase 0 scaffold: configuration and lifecycle are real, the detection engine is not.
- * [evaluate] currently returns an UNKNOWN report carrying
- * [SignalId.META_ENGINE_NOT_IMPLEMENTED]. Phase 1 replaces the body with the real engine
- * (parallel dispatch, per-detector timeouts, crash isolation, caching, scoring) without
- * changing this surface. See docs/PLAN.md.
+ * Everything here is safe to call before [initialize] and safe to call from any thread:
+ * a host that has to reason about ordering will get it wrong, and an integrity SDK that
+ * crashes its host is worse than no integrity SDK.
  */
 public object IntegrityGuard {
 
@@ -30,39 +37,48 @@ public object IntegrityGuard {
     @JvmStatic
     public fun currentReport(): IntegrityReport = state.get()?.lastReport?.get() ?: notInitialised(Depth.QUICK)
 
-    /**
-     * Runs an evaluation at the requested depth.
-     *
-     * Safe to call before [initialize]: it returns UNKNOWN rather than throwing.
-     */
-    public suspend fun evaluate(
-        depth: Depth = Depth.STANDARD,
-        @Suppress("UNUSED_PARAMETER") force: Boolean = false
-    ): IntegrityReport {
-        val current = state.get() ?: return notInitialised(depth)
+    /** Emits every completed evaluation. Cold until [initialize]. */
+    public fun reports(): Flow<IntegrityReport> =
+        state.get()?.reports?.asSharedFlow() ?: MutableSharedFlow<IntegrityReport>().asSharedFlow()
 
-        // TODO(phase-1): replace with DetectionEngine.run(depth) — parallel dispatch,
-        //  per-detector budget, crash isolation, cache, then RiskScorer.score(signals).
-        val report = IntegrityReport.unknown(
+    /**
+     * Runs an evaluation at the requested depth, reusing a cached result when one is still
+     * fresh unless [force] is set.
+     *
+     * Never throws: a detector that fails becomes an INCONCLUSIVE signal, and calling
+     * before [initialize] yields UNKNOWN.
+     */
+    public suspend fun evaluate(depth: Depth = Depth.STANDARD, force: Boolean = false): IntegrityReport {
+        val current = state.get() ?: return notInitialised(depth)
+        val startedAt = System.currentTimeMillis()
+
+        if (!force) {
+            current.cache.get(depth, startedAt)?.let { return it }
+        }
+
+        // TODO(phase-9): bound parallelism so the SDK cannot starve the host's dispatcher.
+        val result = withContext(Dispatchers.Default) { current.engine.run(depth) }
+        val scored = current.scorer.score(result.signals, result.coverage)
+
+        val report = IntegrityReport(
+            verdict = scored.verdict,
+            riskScore = scored.riskScore,
+            categoryScores = scored.categoryScores,
+            signals = result.signals,
+            coverage = result.coverage,
             depth = depth,
-            signals = listOf(
-                Signal(
-                    id = SignalId.META_ENGINE_NOT_IMPLEMENTED,
-                    category = Category.META,
-                    confidence = Confidence.INCONCLUSIVE,
-                    evidence = mapOf("registeredDetectors" to current.config.detectors.size.toString())
-                )
-            )
+            generatedAtMillis = startedAt,
+            sdkVersion = IntegrityReport.SDK_VERSION,
+            reportId = UUID.randomUUID().toString()
         )
 
-        current.lastReport.set(report)
-        runCatching { current.config.sink?.onReport(report) }
+        current.publish(depth, report, startedAt)
         return report
     }
 
     @JvmStatic
     public fun shutdown() {
-        state.set(null)
+        state.getAndSet(null)?.cache?.clear()
     }
 
     private fun notInitialised(depth: Depth): IntegrityReport = IntegrityReport.unknown(
@@ -77,7 +93,28 @@ public object IntegrityGuard {
         )
     )
 
-    private class State(val appContext: Context, val config: IntegrityConfig) {
+    private class State(appContext: Context, val config: IntegrityConfig) {
         val lastReport: AtomicReference<IntegrityReport?> = AtomicReference(null)
+        val reports: MutableSharedFlow<IntegrityReport> = MutableSharedFlow(replay = 1)
+        val cache: ReportCache = ReportCache(config.cacheTtls)
+        val scorer: RiskScorer = RiskScorer(config.policy)
+        val engine: DetectionEngine = DetectionEngine(
+            detectors = config.detectors,
+            context = DefaultDetectionContext(appContext, config),
+            globalBudget = config.detectorBudget
+        )
+
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        fun publish(depth: Depth, report: IntegrityReport, nowMillis: Long) {
+            cache.put(depth, report, nowMillis)
+            lastReport.set(report)
+            scope.launch { reports.emit(report) }
+            // A sink that throws is the host's bug, and must not become ours.
+            runCatching { config.sink?.onReport(report) }
+        }
     }
+
+    private class DefaultDetectionContext(override val appContext: Context, override val config: IntegrityConfig) :
+        DetectionContext
 }

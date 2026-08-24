@@ -5,6 +5,7 @@ import io.integrity.core.Depth
 import io.integrity.core.IntegrityConfig
 import io.integrity.core.IntegrityGuard
 import io.integrity.core.LogcatSink
+import io.integrity.core.Policy
 import io.integrity.detector.app.AppDetectors
 import io.integrity.detector.emulator.EmulatorDetectors
 import io.integrity.detector.environment.EnvironmentDetectors
@@ -31,8 +32,10 @@ class SampleApplication : Application() {
                         HookDetectors.all() +
                         AppDetectors.all() +
                         EnvironmentDetectors.all() +
-                        EmulatorDetectors.all()
+                        EmulatorDetectors.all() +
+                        HostDetector()
                 )
+                .policy(Policy.observability())
                 .reportSink(LogcatSink())
                 .build()
         )

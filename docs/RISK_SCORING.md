@@ -10,17 +10,24 @@ configurable policy, and lets the host decide.
 ## Model
 
 ```
-Signal(id, category, confidence, weight?, evidence)
+Signal(id, category, confidence, evidence)
         │
-        ▼   per category: root, hooking, appTamper, environment, emulation, attestation
-CategoryScore = min(100, cap(Σ w_i · c_i) )
+        ▼   per category: root, hooking, appTamper, environment, emulation, attestation, meta
+categoryScore = min(100, Σ over signals ( weight(id).points × multiplier(confidence) ))
         │
-        ▼
-riskScore = min(100, Σ over categories ( categoryScore · categoryFactor ) / Σ factors  … with escalation rules)
+        ▼   noisy-OR across categories, each damped by its policy factor
+riskScore = round( 100 × ( 1 − Π over categories ( 1 − factor(c) × categoryScore(c)/100 ) ) )
         │
-        ▼
+        ▼   thresholds, then escalation floors
 Verdict ∈ { TRUSTED, LOW_RISK, SUSPICIOUS, COMPROMISED, UNKNOWN }
 ```
+
+**Why noisy-OR rather than an average.** Averaging across categories dilutes real evidence
+with the categories that found nothing: a device with conclusive root evidence and nothing
+else would score 100/6 ≈ 17 and read as clean. Noisy-OR is monotonic and saturating instead —
+one category at 100 gives 100, and two independent categories at 40 give 64. That last number
+matters: it is why "two corroborating categories beat any single heuristic" falls out of the
+arithmetic rather than needing a special case.
 
 ### Confidence multiplier
 

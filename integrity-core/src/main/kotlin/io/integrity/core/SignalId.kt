@@ -31,7 +31,17 @@ public value class SignalId(public val value: String) {
         /** Host misconfiguration, e.g. no signing pin supplied. */
         public val META_CONFIG_INVALID: SignalId = SignalId("META_CONFIG_INVALID")
 
-        /** Scaffold only: the engine has not been implemented yet (phase 1). */
-        public val META_ENGINE_NOT_IMPLEMENTED: SignalId = SignalId("META_ENGINE_NOT_IMPLEMENTED")
+        // --- Referenced by the scorer's escalation rules ahead of their detectors ------
+        // These are decisive on their own, so the scoring model names them directly.
+        // Their detectors arrive in phases 4 and 7.
+
+        /** The running APK is not signed by a pinned certificate. */
+        public val APP_SIGNATURE_MISMATCH: SignalId = SignalId("APP_SIGNATURE_MISMATCH")
+
+        /** A classes*.dex digest does not match the build-time baseline. */
+        public val APP_DEX_DIGEST_MISMATCH: SignalId = SignalId("APP_DEX_DIGEST_MISMATCH")
+
+        /** Play Integrity does not recognise this app: direct repackaging evidence. */
+        public val ATT_APP_NOT_RECOGNISED: SignalId = SignalId("ATT_APP_NOT_RECOGNISED")
     }
 }
