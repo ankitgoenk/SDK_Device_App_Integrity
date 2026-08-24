@@ -74,10 +74,9 @@ public class Policy private constructor(
         private val BASE_WEIGHTS: Map<SignalId, Weight> = mapOf(
             // Removing the native library is the cheapest bypass there is, so its absence
             // must cost something rather than being silently treated as "clean".
-            SignalId.META_NATIVE_UNAVAILABLE to Weight.HIGH,
-            SignalId.APP_SIGNATURE_MISMATCH to Weight.HIGH,
-            SignalId.APP_DEX_DIGEST_MISMATCH to Weight.HIGH,
-            SignalId.ATT_APP_NOT_RECOGNISED to Weight.HIGH
+            // This is a statement about the SDK's own integrity rather than a device
+            // observation, so hard rule 6 (new signals ship INFORMATIONAL) does not apply.
+            SignalId.META_NATIVE_UNAVAILABLE to Weight.HIGH
         )
 
         /** Sensible defaults for most apps. */

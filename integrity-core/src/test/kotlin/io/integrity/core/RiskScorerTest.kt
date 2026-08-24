@@ -10,6 +10,9 @@ class RiskScorerTest {
         .withWeight(ROOT_B, Weight.HIGH)
         .withWeight(HOOK_A, Weight.HIGH)
         .withWeight(ENV_A, Weight.LOW)
+        .withWeight(SignalId.APP_SIGNATURE_MISMATCH, Weight.HIGH)
+        .withWeight(SignalId.APP_DEX_DIGEST_MISMATCH, Weight.HIGH)
+        .withWeight(SignalId.ATT_APP_NOT_RECOGNISED, Weight.HIGH)
 
     private fun score(signals: List<Signal>, coverage: Float = 1f, policy: Policy = policy()) =
         RiskScorer(policy).score(signals, coverage)
@@ -173,6 +176,43 @@ class RiskScorerTest {
 
         assertThat(lenient.verdict).isEqualTo(Verdict.TRUSTED)
         assertThat(harsh.verdict).isEqualTo(Verdict.SUSPICIOUS)
+    }
+
+    @Test
+    fun `an escalation cannot fire for a signal still shipping informational`() {
+        // Hard rule 6 would be a fiction otherwise: a brand-new signal named by an
+        // escalation rule could force COMPROMISED before anyone had seen its FP rate.
+        val unpromoted = Policy.balanced()
+
+        val result = score(
+            listOf(Signal(SignalId.APP_SIGNATURE_MISMATCH, Category.APP_TAMPER, Confidence.CONFIRMED)),
+            policy = unpromoted
+        )
+
+        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.riskScore).isEqualTo(0)
+    }
+
+    @Test
+    fun `promoting the weight arms the escalation`() {
+        val promoted = Policy.balanced().withWeight(SignalId.APP_SIGNATURE_MISMATCH, Weight.HIGH)
+
+        val result = score(
+            listOf(Signal(SignalId.APP_SIGNATURE_MISMATCH, Category.APP_TAMPER, Confidence.CONFIRMED)),
+            policy = promoted
+        )
+
+        assertThat(result.verdict).isEqualTo(Verdict.COMPROMISED)
+    }
+
+    @Test
+    fun `an unpromoted confirmed hooking signal does not escalate either`() {
+        val result = score(
+            listOf(Signal(HOOK_A, Category.HOOKING, Confidence.CONFIRMED)),
+            policy = Policy.balanced()
+        )
+
+        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
     }
 
     @Test
