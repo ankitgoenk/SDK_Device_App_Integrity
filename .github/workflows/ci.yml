@@ -145,7 +145,7 @@ jobs:
       - name: Prove the intended tests actually ran
         run: >-
           tools/check-instrumented-coverage.py
-          integrity-native integrity-detector-root sample-app
+          integrity-native integrity-detector-root integrity-detector-app sample-app
 
       - uses: actions/upload-artifact@v4
         if: always()

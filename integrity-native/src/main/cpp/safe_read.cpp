@@ -27,6 +27,14 @@ constexpr const char* kSelfMem = "/proc/self/mem";
 }  // namespace
 
 NativeStatus readSelfMemory(uintptr_t address, unsigned char* out, size_t length) {
+    return readProcessMemory(kSelfMem, address, out, length);
+}
+
+NativeStatus readProcessMemory(const char* path, uintptr_t address, unsigned char* out,
+                               size_t length) {
+    if (path == nullptr) {
+        return kStatusInvalidInput;
+    }
     if (out == nullptr || length == 0 || length > kMaxSafeReadBytes) {
         return kStatusInvalidInput;
     }
@@ -34,7 +42,7 @@ NativeStatus readSelfMemory(uintptr_t address, unsigned char* out, size_t length
         return kStatusInvalidInput;
     }
 
-    const int fd = open(kSelfMem, O_RDONLY | O_CLOEXEC);
+    const int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
         return kStatusUnavailable;
     }

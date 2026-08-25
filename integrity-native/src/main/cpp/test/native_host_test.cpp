@@ -45,6 +45,49 @@ integrity::NativeStatus parse(const std::string& line, integrity::MappedRange* o
     return integrity::parseMapsLine(line.c_str(), line.size(), out);
 }
 
+/**
+ * Finds an address this process really has no mapping for.
+ *
+ * A fixed constant used to stand in for "unmapped", and that was an assertion about the
+ * address space rather than about the code. Under AddressSanitizer 0xdead0000 falls inside
+ * a shadow mapping and reads back perfectly, so the test failed against correct code —
+ * which is how this was found. Establish the fixture, or the conclusion is about the build
+ * configuration.
+ *
+ * Returns false when /proc/self/maps cannot be consulted; the caller must then say so
+ * rather than quietly asserting nothing.
+ */
+bool findUnmappedAddress(uintptr_t* out) {
+    const uintptr_t candidates[] = {
+        0xdead0000u, 0x00010000u, 0x20000000u, 0x60000000u,
+        static_cast<uintptr_t>(0x0000700000000000ull & UINTPTR_MAX),
+    };
+
+    std::FILE* maps = std::fopen("/proc/self/maps", "r");
+    if (maps == nullptr) return false;
+
+    bool taken[sizeof(candidates) / sizeof(candidates[0])] = {false};
+    char line[512];
+    while (std::fgets(line, sizeof(line), maps) != nullptr) {
+        integrity::MappedRange range{};
+        if (integrity::parseMapsLine(line, std::strlen(line), &range) != integrity::kStatusOk) {
+            continue;
+        }
+        for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
+            if (candidates[i] >= range.start && candidates[i] < range.end) taken[i] = true;
+        }
+    }
+    std::fclose(maps);
+
+    for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
+        if (!taken[i] && candidates[i] != 0) {
+            *out = candidates[i];
+            return true;
+        }
+    }
+    return false;
+}
+
 void buildTokenTests() {
     expect(integrity::verifyBuildToken(integrity::buildToken()) == integrity::kOk,
            "the compiled-in token verifies against itself");
@@ -108,6 +151,17 @@ void malformedMappingTests() {
         char message[160];
         std::snprintf(message, sizeof(message), "malformed line rejected: %s", line);
         expect(parse(line, &range) == integrity::kStatusParseFailed, message);
+    }
+
+    // The contract is (pointer, length), not "a C string". Every case above happens to pass
+    // NUL-terminated data, which let a read one past the end look harmless: the byte there
+    // was always '\0'. This buffer has no terminator, so an off-by-one reads real memory.
+    {
+        const char unterminated[] = {'a', 'a', 'a', 'a'};  // start address, then nothing
+        integrity::MappedRange range2{};
+        expect(integrity::parseMapsLine(unterminated, sizeof(unterminated), &range2) ==
+                   integrity::kStatusParseFailed,
+               "a buffer that ends after the start address is rejected without reading past it");
     }
 
     // An address so long it would wrap must be refused, not truncated into something
@@ -191,9 +245,15 @@ void safeReadTests() {
 
     expect(integrity::readSelfMemory(0, buffer, sizeof(buffer)) == integrity::kStatusUnavailable,
            "reading the null page reports unavailable rather than faulting");
-    expect(integrity::readSelfMemory(0xdead0000ull, buffer, sizeof(buffer)) ==
-               integrity::kStatusUnavailable,
-           "reading an unmapped address reports unavailable rather than faulting");
+    uintptr_t unmapped = 0;
+    if (findUnmappedAddress(&unmapped)) {
+        expect(integrity::readSelfMemory(unmapped, buffer, sizeof(buffer)) ==
+                   integrity::kStatusUnavailable,
+               "reading an unmapped address reports unavailable rather than faulting");
+    } else {
+        std::printf("SKIPPED: no address could be shown to be unmapped, so the unmapped-read "
+                    "property was not exercised\n");
+    }
 
     expect(integrity::readSelfMemory(own, nullptr, 16) == integrity::kStatusInvalidInput,
            "a null destination is invalid input");
@@ -202,6 +262,20 @@ void safeReadTests() {
     expect(integrity::readSelfMemory(own, buffer, integrity::kMaxSafeReadBytes + 1) ==
                integrity::kStatusInvalidInput,
            "an oversized length is refused rather than attempted");
+
+    // The two branches mutation testing found unguarded: both are unreachable through
+    // /proc/self/mem on a healthy process, so breaking either changed nothing observable.
+    expect(integrity::readProcessMemory("/proc/self/no-such-file", own, buffer, 8) ==
+               integrity::kStatusUnavailable,
+           "a file that will not open is unavailable, never success");
+    expect(integrity::readProcessMemory(nullptr, own, buffer, 8) ==
+               integrity::kStatusInvalidInput,
+           "a null path is invalid input");
+    // /dev/null answers a read with zero bytes rather than an error, which is exactly the
+    // short-read case: without the got == 0 check the loop would never make progress.
+    expect(integrity::readProcessMemory("/dev/null", own, buffer, 8) ==
+               integrity::kStatusUnavailable,
+           "a read that returns nothing is a failure, not an empty success");
 }
 
 }  // namespace
