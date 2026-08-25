@@ -378,13 +378,32 @@ void aFunctionOnlyHereToBePatched() {
  * register a difference before its zero is believed.
  */
 void selfTextMeasurementTests() {
+    // Establish the prerequisites before deciding what a failure means. Skipping when the
+    // environment genuinely lacks the capability is right; skipping when it plainly has it
+    // is an escape hatch, and a measurement that quietly reports unavailable everywhere
+    // would slide straight through one. That is not hypothetical — it is what the mutant
+    // that compares other modules does, and this test used to pass against it.
+    std::FILE* probe = std::fopen("/proc/self/maps", "r");
+    const bool mapsReadable = probe != nullptr;
+    if (probe != nullptr) std::fclose(probe);
+
+    unsigned char ownByte = 0;
+    const bool memoryReadable =
+        integrity::readSelfMemory(reinterpret_cast<uintptr_t>(&selfTextMeasurementTests),
+                                  &ownByte, 1) == integrity::kStatusOk;
+
     integrity::SelfTextMeasurement clean{};
     const integrity::NativeStatus status = integrity::measureSelfText(&clean);
-    if (status != integrity::kStatusOk) {
-        std::printf("SKIPPED: self-text measurement unavailable here (status %d)\n",
-                    static_cast<int>(status));
+
+    if (!mapsReadable || !memoryReadable) {
+        std::printf("SKIPPED: /proc/self/{maps,mem} unavailable here, the measurement was "
+                    "not exercised\n");
         return;
     }
+    // Both prerequisites hold, so unavailable is a defect rather than an environment.
+    expect(status == integrity::kStatusOk,
+           "the measurement completes where /proc/self/maps and /proc/self/mem both work");
+    if (status != integrity::kStatusOk) return;
 
     expect(clean.mappingsFound > 0, "an executable mapping for this module was located");
     expect(clean.bytesCompared > 0, "some bytes were actually compared");
