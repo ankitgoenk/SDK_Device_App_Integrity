@@ -94,6 +94,16 @@ jobs:
             tools/check-native-hardening.sh "$so"
           done
 
+      # Hard rule 5 and ADR-0003, checked on the artifact rather than asserted in a
+      # document. Not proof against reflection or dlsym — see the script — but it turns
+      # "add a network call" from typing a line into deliberately hiding one.
+      - name: Assert the shipped SDK cannot name a networking API
+        run: |
+          set -euo pipefail
+          for aar in $(find . -path '*/build/outputs/aar/*-release.aar' -not -path './sample*'); do
+            tools/check-no-network.sh "$aar"
+          done
+
   instrumented:
     name: Instrumented smoke test
     runs-on: ubuntu-latest

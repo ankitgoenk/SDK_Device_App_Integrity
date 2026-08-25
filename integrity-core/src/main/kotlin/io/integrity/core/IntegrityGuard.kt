@@ -48,11 +48,15 @@ public object IntegrityGuard {
      * Never throws: a detector that fails becomes an INCONCLUSIVE signal, and calling
      * before [initialize] yields UNKNOWN.
      */
-    public suspend fun evaluate(depth: Depth = Depth.STANDARD, force: Boolean = false): IntegrityReport {
+    public suspend fun evaluate(
+        depth: Depth = Depth.STANDARD,
+        force: Boolean = false,
+        challenge: String? = null
+    ): IntegrityReport {
         val current = state.get() ?: return notInitialised(depth)
         val startedAt = System.currentTimeMillis()
 
-        if (!force) {
+        if (mayServeFromCache(force, challenge)) {
             current.cache.get(depth, startedAt)?.let { return it }
         }
 
@@ -69,12 +73,31 @@ public object IntegrityGuard {
             depth = depth,
             generatedAtMillis = startedAt,
             sdkVersion = IntegrityReport.SDK_VERSION,
-            reportId = UUID.randomUUID().toString()
+            reportId = UUID.randomUUID().toString(),
+            challenge = challenge
         )
 
-        current.publish(depth, report, startedAt)
+        current.publish(depth, report, startedAt, cacheable = mayCache(challenge))
         return report
     }
+
+    /**
+     * Whether a cached report may answer this call.
+     *
+     * A challenged evaluation never may. The challenge exists to show the evidence was
+     * gathered in response to *this* request; answering it from a sweep that finished
+     * minutes ago, with the new nonce stamped on, is replay with extra steps.
+     */
+    internal fun mayServeFromCache(force: Boolean, challenge: String?): Boolean = !force && challenge == null
+
+    /**
+     * Whether the resulting report may enter the cache.
+     *
+     * The other direction, and easier to miss: a cached challenged report would later be
+     * handed to a plain `evaluate()` still carrying someone else's nonce, which the host
+     * might forward as though it answered a request the backend never issued.
+     */
+    internal fun mayCache(challenge: String?): Boolean = challenge == null
 
     @JvmStatic
     public fun shutdown() {
@@ -106,8 +129,8 @@ public object IntegrityGuard {
 
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-        fun publish(depth: Depth, report: IntegrityReport, nowMillis: Long) {
-            cache.put(depth, report, nowMillis)
+        fun publish(depth: Depth, report: IntegrityReport, nowMillis: Long, cacheable: Boolean) {
+            if (cacheable) cache.put(depth, report, nowMillis)
             lastReport.set(report)
             scope.launch { reports.emit(report) }
             // A sink that throws is the host's bug, and must not become ours.
