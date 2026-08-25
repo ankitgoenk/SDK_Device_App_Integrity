@@ -115,9 +115,12 @@ not try separately from one it failed to catch — untried is not uncaught.
 2. Is the check implemented at the layer that is hardest to hook for its value?
 3. Does failure degrade to `INCONCLUSIVE` rather than silently to "clean"?
 4. Could a bug in this detector return `INCONCLUSIVE` too — and would any test notice?
-5. Does the evidence map contain anything that could identify a person or device?
-6. Is the worst-case runtime bounded, and is the budget realistic on a low-end device?
-7. Does the catalog entry describe a known bypass honestly?
+5. What does this signal share with the ones already promoted — the primitive it reads
+   through, the file it trusts, the interface it depends on? Signals that fail to the same
+   cause are one input, not several (see `docs/RISK_SCORING.md`).
+6. Does the evidence map contain anything that could identify a person or device?
+7. Is the worst-case runtime bounded, and is the budget realistic on a low-end device?
+8. Does the catalog entry describe a known bypass honestly?
 
 ## Security issues
 
