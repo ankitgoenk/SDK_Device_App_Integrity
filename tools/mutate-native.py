@@ -25,7 +25,7 @@ import sys
 import tempfile
 
 CPP = pathlib.Path(__file__).resolve().parent.parent / "integrity-native/src/main/cpp"
-SOURCES = ("selfcheck.cpp", "maps.cpp", "safe_read.cpp")
+SOURCES = ("selfcheck.cpp", "maps.cpp", "safe_read.cpp", "selftext.cpp")
 TESTS = ("test/native_host_test.cpp", "test/native_property_test.cpp")
 
 
@@ -110,6 +110,27 @@ MUTATIONS = (
     Mutation("safe_read.cpp", "return kStatusUnavailable;\n    }\n\n    NativeStatus status",
              "return kStatusOk;\n    }\n\n    NativeStatus status",
              "an unopenable /proc/self/mem reported as success"),
+    # --- selftext.cpp: the measurement, where a silent zero is the danger ---------------
+    Mutation("selftext.cpp", "if (out->mappingsFound == 0 || out->bytesCompared == 0) {",
+             "if (false) {", "having compared nothing reported as a clean result"),
+    Mutation("selftext.cpp", "if (fromMemory[i] != fromFile[i]) {", "if (false) {",
+             "comparison never finds a difference"),
+    Mutation("selftext.cpp", "if (fromMemory[i] != fromFile[i]) {", "if (true) {",
+             "comparison always finds a difference"),
+    Mutation("selftext.cpp", "for (size_t i = 0; i < comparable; ++i) {",
+             "for (size_t i = 0; i < 1; ++i) {", "only the first byte of each chunk compared"),
+    Mutation("selftext.cpp", "out->bytesCompared += comparable;", "out->bytesCompared += 1;",
+             "bytes compared over-reported as inspected"),
+    Mutation("selftext.cpp", "if (strcmp(path, ours) != 0) {", "if (false) {",
+             "mappings from other modules compared against our own file"),
+    Mutation("selftext.cpp", "if (!range.executable || !range.readable) {", "if (false) {",
+             "non-executable mappings inspected as if they were code"),
+    Mutation("selftext.cpp", "if (length == 0 || length + 1 > capacity) {", "if (false) {",
+             "path copied without a bounds check"),
+    Mutation("selftext.cpp", "return kStatusUnavailable;\n    }\n\n    rewind(maps);",
+             "return kStatusOk;\n    }\n\n    rewind(maps);",
+             "failing to identify our own module reported as success"),
+
     # --- selfcheck.cpp ------------------------------------------------------------------
     Mutation("selfcheck.cpp", "return difference == 0;", "return true;",
              "token comparison always succeeds"),

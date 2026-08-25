@@ -8,7 +8,11 @@
 #include <cstring>
 #include <string>
 
+#include <sys/mman.h>
+#include <unistd.h>
+
 #include "../maps.h"
+#include "../selftext.h"
 #include "../safe_read.h"
 #include "../selfcheck.h"
 
@@ -356,6 +360,96 @@ void safeReadTests() {
            "a read that returns nothing is a failure, not an empty success");
 }
 
+/** Deliberately never called. Its bytes exist only to be scribbled on and restored. */
+void aFunctionOnlyHereToBePatched() {
+    volatile int keepMe = 0;
+    (void)keepMe;
+}
+
+/**
+ * The clean-mismatch measurement, and the check that makes its result mean something.
+ *
+ * `bytesDiffering == 0` is worthless on its own: a comparison that inspects nothing, or one
+ * that is simply broken, reports exactly the same number. So the instrument is shown to
+ * register a difference before its zero is believed.
+ */
+void selfTextMeasurementTests() {
+    integrity::SelfTextMeasurement clean{};
+    const integrity::NativeStatus status = integrity::measureSelfText(&clean);
+    if (status != integrity::kStatusOk) {
+        std::printf("SKIPPED: self-text measurement unavailable here (status %d)\n",
+                    static_cast<int>(status));
+        return;
+    }
+
+    expect(clean.mappingsFound > 0, "an executable mapping for this module was located");
+    expect(clean.bytesCompared > 0, "some bytes were actually compared");
+    expect(clean.bytesDiffering == 0, "a clean process matches the file it was loaded from");
+    std::printf("clean measurement: mappings=%u compared=%llu differing=%llu\n",
+                clean.mappingsFound,
+                static_cast<unsigned long long>(clean.bytesCompared),
+                static_cast<unsigned long long>(clean.bytesDiffering));
+
+    // Now break it, for real. Not a flag telling the measurement to report a difference:
+    // one byte of this process's own executable code is rewritten, which is the state an
+    // inline hook leaves behind.
+    unsigned char* target = reinterpret_cast<unsigned char*>(&aFunctionOnlyHereToBePatched);
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0) {
+        std::printf("SKIPPED: page size unknown, the patched case was not exercised\n");
+        return;
+    }
+    const uintptr_t page = reinterpret_cast<uintptr_t>(target) &
+                           ~(static_cast<uintptr_t>(pageSize) - 1);
+
+    if (mprotect(reinterpret_cast<void*>(page), static_cast<size_t>(pageSize),
+                 PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
+        std::printf("SKIPPED: this image refuses to make its own text writable, so the "
+                    "patched case was not exercised\n");
+        return;
+    }
+
+    const unsigned char original = *target;
+    *target = static_cast<unsigned char>(original ^ 0xff);
+    // Anti-vacuity: the fixture must be proven built. If the write silently did nothing,
+    // the failure below would read as "the measurement is broken" rather than "the patch
+    // never happened", and someone would spend a day debugging working code.
+    const bool patchLanded = (*target != original);
+
+    integrity::SelfTextMeasurement patched{};
+    const integrity::NativeStatus patchedStatus = integrity::measureSelfText(&patched);
+
+    *target = original;
+    mprotect(reinterpret_cast<void*>(page), static_cast<size_t>(pageSize),
+             PROT_READ | PROT_EXEC);
+
+    expect(patchLanded, "the fixture was built: this process's own text really was modified");
+    if (!patchLanded) return;
+
+    expect(patchedStatus == integrity::kStatusOk, "the measurement completed on patched text");
+    expect(patched.bytesDiffering > 0,
+           "a modified byte is seen, so the clean zero above is a result and not a silence");
+    expect(patched.bytesCompared > 0, "the patched run also compared something");
+
+    integrity::SelfTextMeasurement restored{};
+    expect(integrity::measureSelfText(&restored) == integrity::kStatusOk,
+           "the measurement still completes after restoring");
+    expect(restored.bytesDiffering == 0, "restoring the byte restores the match");
+}
+
+/** A path that is not a mapping table must be reported as unavailable, never as clean. */
+void selfTextFailurePaths() {
+    integrity::SelfTextMeasurement out{};
+    expect(integrity::measureSelfTextFrom("/proc/self/no-such-maps", &out) ==
+               integrity::kStatusUnavailable,
+           "an unreadable mapping table is unavailable, not a clean result");
+    expect(out.bytesCompared == 0, "nothing is reported as compared when nothing was");
+    expect(integrity::measureSelfTextFrom(nullptr, &out) == integrity::kStatusInvalidInput,
+           "a null path is invalid input");
+    expect(integrity::measureSelfText(nullptr) == integrity::kStatusInvalidInput,
+           "a null result pointer is invalid input");
+}
+
 }  // namespace
 
 int main() {
@@ -364,6 +458,8 @@ int main() {
     malformedMappingTests();
     unsafeRangeTests();
     safeReadTests();
+    selfTextMeasurementTests();
+    selfTextFailurePaths();
 
     if (failures == 0) {
         // Printed so a 32-bit run is distinguishable from a 64-bit one in CI logs; the

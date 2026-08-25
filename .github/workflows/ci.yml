@@ -283,6 +283,7 @@ jobs:
             integrity-native/src/main/cpp/selfcheck.cpp \
             integrity-native/src/main/cpp/maps.cpp \
             integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/selftext.cpp \
             integrity-native/src/main/cpp/test/native_host_test.cpp \
             -o /tmp/native_host_test
           /tmp/native_host_test
@@ -311,6 +312,7 @@ jobs:
             integrity-native/src/main/cpp/selfcheck.cpp \
             integrity-native/src/main/cpp/maps.cpp \
             integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/selftext.cpp \
             integrity-native/src/main/cpp/test/native_host_test.cpp \
             -o /tmp/native_host_test_32
           /tmp/native_host_test_32
@@ -330,6 +332,8 @@ jobs:
               integrity-native/src/main/cpp/selfcheck.cpp \
               integrity-native/src/main/cpp/maps.cpp \
               integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/selftext.cpp \
+              integrity-native/src/main/cpp/selftext.cpp \
               integrity-native/src/main/cpp/test/native_property_test.cpp \
               -o /tmp/native_property_test
             /tmp/native_property_test
@@ -347,6 +351,8 @@ jobs:
               integrity-native/src/main/cpp/selfcheck.cpp \
               integrity-native/src/main/cpp/maps.cpp \
               integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/selftext.cpp \
+              integrity-native/src/main/cpp/selftext.cpp \
               "integrity-native/src/main/cpp/test/$t.cpp" -o /tmp/asan_$t
             /tmp/asan_$t
           done
@@ -360,7 +366,7 @@ jobs:
       - name: Reject C++ standard library headers in shipped sources
         run: |
           set -euo pipefail
-          for f in maps.cpp safe_read.cpp selfcheck.cpp; do
+          for f in maps.cpp safe_read.cpp selfcheck.cpp selftext.cpp; do
             g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -nostdinc++ -fsyntax-only \
               -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' "integrity-native/src/main/cpp/$f"
             echo "$f builds without libc++"
