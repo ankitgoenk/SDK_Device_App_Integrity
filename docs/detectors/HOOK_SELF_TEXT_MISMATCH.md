@@ -198,13 +198,48 @@ The wording that must appear in the catalog and in any host-facing documentation
 
 ---
 
-## Open questions for review
+## Decisions taken at review
 
-1. **Scope of the compared region.** The whole `r-xp` mapping, or a bounded window around
-   the entry points we care about? Whole-region is a stronger check and a larger read
-   budget; `kMaxSafeReadBytes` is 64 KB and our `.so` is ~6.6 KB, so whole-region is
-   currently affordable — but that stops being true as phase 3b grows the library.
-2. **Is the disk read affordable off the main thread at `QUICK` depth**, or is this
-   `FULL`-only? Leaning `FULL`.
-3. **Does the clean mismatch count actually measure zero** on both CI images? If not, this
-   design does not proceed.
+1. **Scope: the whole `r-xp` mapping.** Stronger than a window around entry points, and it
+   catches modification anywhere in the region rather than only at the prologue we
+   anticipated. Affordable now — ~6.6 KB against a 64 KB budget — and if phase 3b makes that
+   untrue, the implementation can change while the evidence semantics stay put.
+
+   A `QUICK` variant limited to entry-point windows is **deliberately not implemented**. Two
+   implementations of the same check means two things to test and two places for a security
+   bug to hide, in exchange for milliseconds.
+
+2. **Depth: `FULL` only.** This does disk IO and a memory comparison; it should not
+   masquerade as a two-millisecond check. The depth semantics already exist, so the
+   expensive behaviour is declared rather than hidden.
+
+3. **The clean mismatch is measured before the detector is written**, in its own PR. The
+   whole design rests on `legitimate process ⇒ memory matches the file on disk`, and this
+   document already names text relocations as a plausible reason that could be false. If it
+   is false, what gets built is a sophisticated false-positive generator, so the assumption
+   is tested first and cheaply.
+
+   **The measurement's own assertion is three-part**, because `0 mismatches` must not be
+   able to mean `0 mappings inspected`:
+
+   ```
+   executableMappingsFound > 0
+     AND bytesCompared > 0
+     AND mismatches == 0
+   ```
+
+   A measurement that inspects nothing agrees with everything. Both emulator classes —
+   `google_apis` and `google_apis_playstore` — must satisfy all three.
+
+## Sequence
+
+```
+#11  design (this document)                              merged
+  ↓
+#12  clean-mismatch measurement, both images
+       ├── zero      → implement the detector
+       └── non-zero  → stop; the design does not proceed in this form
+  ↓
+#13  detector implementation, with the fixtures, bypass,
+     property and mutation coverage specified above
+```

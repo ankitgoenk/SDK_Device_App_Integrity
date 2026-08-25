@@ -17,13 +17,28 @@ struct MappedRange {
     bool readable;
     bool writable;
     bool executable;
+
+    /** Offset into the backing file at which this mapping begins. Zero when anonymous. */
+    uintptr_t fileOffset;
+
+    // The path is returned as a window into the caller's line rather than copied. There is
+    // no allocator here (ADR-0005 point 4), and a fixed buffer would either truncate real
+    // paths or bloat every range. The caller owns the line and must keep it alive.
+    size_t pathOffset;
+    size_t pathLength;  // zero for an anonymous mapping
 };
 
 /**
  * Parses one line of /proc/self/maps.
  *
- * Accepts the address range and permission block; everything after it is ignored, since
- * nothing here needs the path and a path is the part most likely to contain surprises.
+ * Reads the address range, the permission block, the file offset and the path. The offset
+ * and path used to be ignored on the grounds that nothing needed them; comparing a mapping
+ * against the file it came from needs both, and the path is still the part most likely to
+ * contain surprises, so it is returned as bounds into the caller's buffer and never copied
+ * or interpreted here.
+ *
+ * The whole line must be well formed. A line truncated after the permission block is a
+ * parse failure, not a partial success: half a maps line is not evidence about a mapping.
  */
 [[nodiscard]] NativeStatus parseMapsLine(const char* line, size_t length, MappedRange* out);
 

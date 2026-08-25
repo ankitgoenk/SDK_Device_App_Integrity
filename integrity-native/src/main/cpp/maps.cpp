@@ -43,6 +43,24 @@ bool parseHex(const char* text, size_t length, size_t* index, uintptr_t* out) {
     return true;
 }
 
+/** Reads decimal digits, refusing to wrap. Mirrors parseHex; the inode field is decimal. */
+bool parseDecimal(const char* text, size_t length, size_t* index) {
+    constexpr int kDecimalBase = 10;
+    uintptr_t value = 0;
+    size_t digits = 0;
+
+    while (*index < length && text[*index] >= '0' && text[*index] <= '9') {
+        const uint8_t digit = static_cast<uint8_t>(text[*index] - '0');
+        if (value > (UINTPTR_MAX - digit) / kDecimalBase) {
+            return false;
+        }
+        value = value * kDecimalBase + digit;
+        ++(*index);
+        ++digits;
+    }
+    return digits != 0;
+}
+
 }  // namespace
 
 NativeStatus parseMapsLine(const char* line, size_t length, MappedRange* out) {
@@ -86,12 +104,61 @@ NativeStatus parseMapsLine(const char* line, size_t length, MappedRange* out) {
     if (end < start) {
         return kStatusParseFailed;
     }
+    index += 4;
+
+    // " <offset> <major>:<minor> <inode>" then optional whitespace and an optional path.
+    if (index >= length || line[index] != ' ') {
+        return kStatusParseFailed;
+    }
+    ++index;
+    uintptr_t fileOffset = 0;
+    if (!parseHex(line, length, &index, &fileOffset)) {
+        return kStatusParseFailed;
+    }
+
+    if (index >= length || line[index] != ' ') {
+        return kStatusParseFailed;
+    }
+    ++index;
+    uintptr_t device = 0;
+    if (!parseHex(line, length, &index, &device)) {
+        return kStatusParseFailed;
+    }
+    if (index >= length || line[index] != ':') {
+        return kStatusParseFailed;
+    }
+    ++index;
+    if (!parseHex(line, length, &index, &device)) {
+        return kStatusParseFailed;
+    }
+
+    if (index >= length || line[index] != ' ') {
+        return kStatusParseFailed;
+    }
+    ++index;
+    if (!parseDecimal(line, length, &index)) {
+        return kStatusParseFailed;
+    }
+
+    // The path is optional and is never interpreted here: an anonymous mapping has none,
+    // and a pathname can contain anything the filesystem allows, including spaces. Take
+    // everything after the padding up to the end of the line, minus any terminator.
+    while (index < length && line[index] == ' ') {
+        ++index;
+    }
+    size_t pathEnd = length;
+    while (pathEnd > index && (line[pathEnd - 1] == '\n' || line[pathEnd - 1] == '\r')) {
+        --pathEnd;
+    }
 
     out->start = start;
     out->end = end;
     out->readable = (r == 'r');
     out->writable = (w == 'w');
     out->executable = (x == 'x');
+    out->fileOffset = fileOffset;
+    out->pathOffset = index;
+    out->pathLength = pathEnd > index ? pathEnd - index : 0;
     return kStatusOk;
 }
 

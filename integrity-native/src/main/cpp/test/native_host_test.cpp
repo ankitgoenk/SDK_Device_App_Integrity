@@ -124,6 +124,59 @@ void validMappingTests() {
     expect(parse("aaaa-bbbb rw-p 00000000 00:00 0", &anonymous) == integrity::kStatusOk,
            "an anonymous mapping with no path parses");
     expect(anonymous.writable && !anonymous.executable, "rw- is not executable");
+    expect(anonymous.pathLength == 0, "an anonymous mapping reports no path");
+    expect(anonymous.fileOffset == 0, "an anonymous mapping has no file offset");
+
+    // The file offset and the path, which comparing a mapping against its file depends on.
+    {
+        const std::string line =
+            "b6f2c000-b6f4d000 r-xp 0001f000 fd:00 1234  /data/app/lib/libintegrity.so";
+        integrity::MappedRange backed{};
+        expect(parse(line, &backed) == integrity::kStatusOk, "a file-backed mapping parses");
+        expect(backed.fileOffset == 0x1f000u, "the file offset is read, not assumed zero");
+        expect(line.substr(backed.pathOffset, backed.pathLength) ==
+                   "/data/app/lib/libintegrity.so",
+               "the path bounds select exactly the path, padding excluded");
+    }
+
+    // A pathname may contain spaces, so the path is everything after the padding rather
+    // than the next whitespace-delimited field.
+    {
+        const std::string spaced = "1000-2000 r--p 00000000 00:00 7 /data/a b/lib.so";
+        integrity::MappedRange withSpaces{};
+        expect(parse(spaced, &withSpaces) == integrity::kStatusOk, "a path with spaces parses");
+        expect(spaced.substr(withSpaces.pathOffset, withSpaces.pathLength) == "/data/a b/lib.so",
+               "a path containing a space is not truncated at it");
+    }
+
+    // /proc lines arrive with a terminator when read by line; it is not part of the path.
+    {
+        const std::string terminated = "1000-2000 r--p 00000000 00:00 7 /lib/x.so\n";
+        integrity::MappedRange nl{};
+        expect(parse(terminated, &nl) == integrity::kStatusOk, "a terminated line parses");
+        expect(terminated.substr(nl.pathOffset, nl.pathLength) == "/lib/x.so",
+               "the line terminator is not part of the path");
+    }
+
+    // Used to parse: the tail was ignored, so half a line looked like a whole mapping.
+    // Half a maps line is not evidence about a mapping.
+    expect(parse("aaaa-bbbb r--p 0", &range) == integrity::kStatusParseFailed,
+           "a line truncated after the permissions is a parse failure, not a partial success");
+    expect(parse("aaaa-bbbb r--p 00000000 00:00", &range) == integrity::kStatusParseFailed,
+           "a line missing the inode is a parse failure");
+    expect(parse("aaaa-bbbb r--p 00000000 0000 0", &range) == integrity::kStatusParseFailed,
+           "a device field with no colon is a parse failure");
+
+    // Otherwise well-formed lines with one number missing. The short garbage lines above
+    // stopped isolating this once the grammar grew: they now fail on the trailing fields
+    // instead, so a parser that read an absent number as zero would still be rejected —
+    // for the wrong reason, which is no test at all.
+    expect(parse("-bbbb r--p 00000000 00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent start address is not read as zero");
+    expect(parse("aaaa- r--p 00000000 00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent end address is not read as zero");
+    expect(parse("aaaa-bbbb r--p  00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent file offset is not read as zero");
 }
 
 // Case 2: malformed input is rejected, never accepted-with-garbage.
@@ -184,8 +237,8 @@ void malformedMappingTests() {
 
 // Case 3: input that parses cleanly but is not safe to access.
 void unsafeRangeTests() {
-    const integrity::MappedRange readable{0x1000, 0x2000, true, false, false};
-    const integrity::MappedRange unreadable{0x1000, 0x2000, false, false, false};
+    const integrity::MappedRange readable{0x1000, 0x2000, true, false, false, 0, 0, 0};
+    const integrity::MappedRange unreadable{0x1000, 0x2000, false, false, false, 0, 0, 0};
 
     expect(integrity::rangeIsReadable(readable, 0x1000, 0x1000) == integrity::kStatusOk,
            "the whole mapping is readable");

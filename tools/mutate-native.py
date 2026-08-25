@@ -52,14 +52,36 @@ MUTATIONS = (
              "empty number accepted as zero"),
     # --- maps.cpp: grammar and consistency ----------------------------------------------
     Mutation("maps.cpp", "if (end < start) {", "if (false) {", "inverted range accepted"),
-    Mutation("maps.cpp", "if (index + 4 > length) {", "if (index + 5 > length) {",
-             "permission-field length check off by one"),
+    # Deliberately the under-check rather than the over-check. Requiring one byte more
+    # (index + 5) became unobservable when the grammar grew a mandatory tail: the correct
+    # code accepts the permissions and then fails on the missing offset, so both reject the
+    # same inputs. Allowing one byte less reads past the buffer, which ASan sees.
+    Mutation("maps.cpp", "if (index + 4 > length) {", "if (index + 3 > length) {",
+             "permission-field length check reads one byte past the buffer"),
     Mutation("maps.cpp", "if (index >= length || line[index] != '-') {",
              "if (index > length || line[index] != '-') {", "separator bounds check off by one"),
     Mutation("maps.cpp", "(p != 'p' && p != 's')", "(p != 'p' && p != 's' && p != '-')",
              "private/shared flag accepts a third value"),
     Mutation("maps.cpp", "if (line == nullptr || out == nullptr || length == 0) {",
              "if (out == nullptr || length == 0) {", "null line no longer rejected"),
+    # --- maps.cpp: the file offset and path, which the mismatch check depends on --------
+    Mutation("maps.cpp", "out->fileOffset = fileOffset;", "out->fileOffset = 0;",
+             "file offset reported as zero, so every comparison starts at the wrong place"),
+    Mutation("maps.cpp", "out->pathLength = pathEnd > index ? pathEnd - index : 0;",
+             "out->pathLength = 0;", "path always reported absent"),
+    Mutation("maps.cpp", "while (pathEnd > index && (line[pathEnd - 1] == '\\n' || line[pathEnd - 1] == '\\r')) {",
+             "while (false) {", "line terminator left inside the path"),
+    Mutation("maps.cpp", "while (index < length && line[index] == ' ') {", "while (false) {",
+             "padding before the path not skipped"),
+    Mutation("maps.cpp", "if (index >= length || line[index] != ':') {", "if (false) {",
+             "device field accepted without its colon"),
+    Mutation("maps.cpp", "if (!parseDecimal(line, length, &index)) {", "if (false) {",
+             "inode field no longer required"),
+    Mutation("maps.cpp", "if (value > (UINTPTR_MAX - digit) / kDecimalBase) {", "if (false) {",
+             "decimal overflow guard removed"),
+    Mutation("maps.cpp", "return digits != 0;", "return true;",
+             "an empty inode accepted as valid"),
+
     # --- maps.cpp: rangeIsReadable, the total specification ------------------------------
     Mutation("maps.cpp", "if (address > UINTPTR_MAX - length) {", "if (false) {",
              "range overflow guard removed"),

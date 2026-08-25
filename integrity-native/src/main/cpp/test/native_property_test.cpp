@@ -84,7 +84,7 @@ bool wouldWrap(uintptr_t address, size_t length) {
 // so a shared bug would have to be the same mistake made twice in two different shapes.
 // ---------------------------------------------------------------------------
 bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outEnd,
-                   bool* readable, bool* writable, bool* executable) {
+                   uintptr_t* outOffset, bool* readable, bool* writable, bool* executable) {
     const size_t dash = line.find('-');
     if (dash == std::string::npos || dash == 0) return false;
     for (size_t i = 0; i < dash; ++i) {
@@ -107,6 +107,50 @@ bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outE
     if (x != 'x' && x != '-') return false;
     if (p != 'p' && p != 's') return false;
 
+    // " <offset> <maj>:<min> <inode>". Split on spaces and check each field's shape, which
+    // is a different way of reading the grammar than the parser's index walk.
+    const size_t fieldsAt = space + 5;
+    if (fieldsAt >= line.size() || line[fieldsAt] != ' ') return false;
+
+    std::string rest = line.substr(fieldsAt + 1);
+    const size_t offsetEnd = rest.find(' ');
+    if (offsetEnd == std::string::npos || offsetEnd == 0) return false;
+    const std::string offsetText = rest.substr(0, offsetEnd);
+    for (char c : offsetText) {
+        if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
+    }
+    errno = 0;
+    const unsigned long long offset = std::strtoull(offsetText.c_str(), nullptr, 16);
+    if (errno == ERANGE || offset > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
+
+    rest = rest.substr(offsetEnd + 1);
+    const size_t deviceEnd = rest.find(' ');
+    if (deviceEnd == std::string::npos) return false;
+    const std::string device = rest.substr(0, deviceEnd);
+    const size_t colon = device.find(':');
+    if (colon == std::string::npos || colon == 0 || colon + 1 >= device.size()) return false;
+    for (size_t i = 0; i < device.size(); ++i) {
+        if (i == colon) continue;
+        if (!std::isxdigit(static_cast<unsigned char>(device[i]))) return false;
+    }
+    // Each half must also fit, which the parser checks per digit.
+    errno = 0;
+    if (std::strtoull(device.substr(0, colon).c_str(), nullptr, 16), errno == ERANGE) return false;
+    errno = 0;
+    if (std::strtoull(device.substr(colon + 1).c_str(), nullptr, 16), errno == ERANGE) return false;
+
+    rest = rest.substr(deviceEnd + 1);
+    size_t inodeDigits = 0;
+    while (inodeDigits < rest.size() &&
+           std::isdigit(static_cast<unsigned char>(rest[inodeDigits]))) {
+        ++inodeDigits;
+    }
+    if (inodeDigits == 0) return false;
+    errno = 0;
+    const unsigned long long inode =
+        std::strtoull(rest.substr(0, inodeDigits).c_str(), nullptr, 10);
+    if (errno == ERANGE || inode > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
+
     errno = 0;
     const unsigned long long start = std::strtoull(line.substr(0, dash).c_str(), nullptr, 16);
     if (errno == ERANGE || start > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
@@ -117,6 +161,7 @@ bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outE
 
     if (end < start) return false;
 
+    *outOffset = static_cast<uintptr_t>(offset);
     *outStart = static_cast<uintptr_t>(start);
     *outEnd = static_cast<uintptr_t>(end);
     *readable = (r == 'r');
@@ -247,10 +292,11 @@ void parserMatchesAnIndependentOracle() {
 
         uintptr_t start = 0;
         uintptr_t end = 0;
+        uintptr_t offset = 0;
         bool r = false;
         bool w = false;
         bool x = false;
-        const bool oracle = oracleAccepts(line, &start, &end, &r, &w, &x);
+        const bool oracle = oracleAccepts(line, &start, &end, &offset, &r, &w, &x);
 
         if (parsed != oracle) {
             std::printf("FAIL: parser said %d, oracle said %d, for: %s\n",
@@ -259,7 +305,8 @@ void parserMatchesAnIndependentOracle() {
             return;
         }
         if (parsed && (range.start != start || range.end != end || range.readable != r ||
-                       range.writable != w || range.executable != x)) {
+                       range.writable != w || range.executable != x ||
+                       range.fileOffset != offset)) {
             std::printf("FAIL: parser and oracle disagree on the values for: %s\n", line.c_str());
             ++failures;
             return;
@@ -301,6 +348,9 @@ void rangeValidationMatchesItsSpecification() {
             randomBelow(2) == 0,
             randomBelow(2) == 0,
             randomBelow(2) == 0,
+            0,
+            0,
+            0,
         };
         const uintptr_t address = randomAddress();
         const size_t length = randomBelow(2) ? randomBelow(96) : randomBelow(4096);
