@@ -22,6 +22,10 @@ hostile co-installed apps). **Currently design-phase: documentation only, no cod
 6. New signals ship at `INFORMATIONAL` weight until shadow-mode data justifies promotion.
 7. `integrity-core` takes no third-party runtime dependency beyond coroutines and
    `androidx.annotation`.
+8. **The client may report evidence and consume a server decision. It must never treat the
+   absence of evidence, the absence of a server response, or a locally computed verdict as
+   proof that the device is trusted.** The SDK says what it observed; the backend decides.
+   See ADR-0006.
 
 ## Conventions
 
