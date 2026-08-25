@@ -40,6 +40,26 @@ jobs:
       # (124 problems). Scoped to this job so the cache still benefits the real build.
       - run: ./gradlew detekt ktlintCheck --no-configuration-cache
 
+  mutation:
+    name: Backend mutation gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      # Breaks one guard at a time in the challenge store, the decision pipeline and the
+      # decision policy, and requires every mutant to be caught. The in-suite anti-vacuity
+      # tests catch wholesale breakage; this catches the edits that look like refactors —
+      # a >= flipped to >, a TTL widened, a compare-and-set rewritten as read-then-write.
+      #
+      # Its own job because it runs the test task once per mutant. In parallel with the rest,
+      # so it adds wall-clock only if it turns out to be the slowest lane.
+      - name: Every mutant must be killed
+        run: tools/mutate-backend.py
+
   api:
     name: Public API compatibility
     runs-on: ubuntu-latest
@@ -92,7 +112,8 @@ jobs:
             io.integrity.core.ReportCacheTest \
             io.integrity.core.IntegrityConfigTest \
             io.integrity.sample.backend.InMemoryChallengeStoreTest \
-            io.integrity.sample.backend.AntiVacuityTest
+            io.integrity.sample.backend.AntiVacuityTest \
+            io.integrity.sample.backend.VerificationServiceTest
 
       - name: Assert the shipped .so is stripped, unexported, budgeted and hardened
         run: |

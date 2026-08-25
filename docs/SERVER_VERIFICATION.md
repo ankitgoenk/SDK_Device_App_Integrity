@@ -82,6 +82,48 @@ A challenge TTL is not a decision window: 120 s to answer a challenge, 30 minute
 decision that results (ADR-0006). A test asserts the former stays below the latter, because the
 tempting simplification is to unify them.
 
+## Evidence can incriminate. It can never exonerate.
+
+The single most important property of this pipeline, and the one that is easy to get wrong in
+a way that looks right.
+
+A detector that finds nothing emits no signal, and `coverage` is computed on-device from how
+many detectors ran — not from the signal list. So a clean device and a client suppressing
+everything send **byte-identical** reports: no signals, coverage 1.0. There is nothing the
+backend can compute that separates them.
+
+An earlier draft of the pipeline tried, by comparing the report against the set of signals the
+server expected for that SDK version and depth. It cannot work, for exactly the reason above:
+the expected set for a healthy device is empty. Recomputing the score server-side defends
+against a client that *lies about its verdict*. It does nothing against a client that simply
+**omits**, because a noisy-OR over an empty signal list is zero risk, and an honest
+recomputation of nothing says clean.
+
+So the report is never a route to trust:
+
+- Signals are believed when they **incriminate**. A tampered client has no reason to invent
+  evidence against itself, so an incriminating signal is credible however it arrived.
+- Signals that merely fail to incriminate establish nothing at all.
+- `TRUSTED` comes only from the authenticated anchor — a Play Integrity token that verifies,
+  for this app, this device, and this challenge.
+
+Two consequences worth stating because they read as bugs otherwise:
+
+- **An empty report with a verified token is `TRUSTED`.** That is the ordinary clean case, not
+  a gap.
+- **A spotless report with no token is `UNAVAILABLE`, never `TRUSTED`.** No amount of clean
+  client evidence substitutes for attestation.
+
+The client's `coveragePermille` is consulted nowhere, and the scorer is deliberately called
+with full coverage. Its low-coverage gate exists to stop a thin report reading as clean *on
+the device*; reusing it server-side would let a client discard incriminating findings it had
+already sent by also claiming it had not looked hard. There is a test for that specific
+downgrade.
+
+If we ever want the backend to reason about coverage properly, the SDK has to emit an explicit
+"this detector ran and found nothing" marker per detector. That is an SDK change and deserves
+its own ADR; it is not a backend problem to solve.
+
 ## Play Integrity
 
 - **Standard requests** for routine checks: cheap, low latency, uses a warm token provider.
