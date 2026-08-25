@@ -96,9 +96,29 @@ export interface Subscription {
 export interface IntegrityDecision {
   readonly decision: 'TRUSTED' | 'COMPROMISED' | 'UNAVAILABLE' | 'INSUFFICIENT_EVIDENCE';
   readonly decisionId: string;
+  /**
+   * The challenge this decision answers, or null.
+   *
+   * Unexpired is not the same as fresh. A sensitive action needs a decision bound to a
+   * challenge minted for *that action*, not merely one that has not yet timed out — a
+   * TRUSTED from app open says nothing about the device half an hour later.
+   */
+  readonly challenge: string | null;
+  readonly evaluatedAtMillis: number;
+  /** Server-authoritative. A client may shorten this, never extend it. */
   readonly expiresAtMillis: number;
   readonly actions?: readonly string[];
 }
+
+/**
+ * Whether a decision may be acted on, given what is being attempted.
+ *
+ * Deliberately a function of both the decision and the action: ordinary use accepts any
+ * unexpired decision, a sensitive action requires one bound to a challenge issued for it.
+ * Written here so the distinction is reachable from the type system rather than living in
+ * a document nobody opens twice.
+ */
+export type ActionSensitivity = 'ORDINARY' | 'SENSITIVE';
 
 export interface IntegrityModule {
   /** Registers detectors and returns. Starts no work and blocks nothing. */

@@ -109,8 +109,26 @@ at once.
 
 ```jsonc
 { "decision": "TRUSTED | COMPROMISED | UNAVAILABLE | INSUFFICIENT_EVIDENCE",
-  "decisionId": "uuid", "expiresAtMillis": 1735693200000, "actions": ["..."] }
+  "decisionId": "uuid",
+  "challenge": "the challenge this decision answers, or null",
+  "evaluatedAtMillis": 1735689600000,
+  "expiresAtMillis": 1735693200000,
+  "actions": ["..."] }
 ```
+
+**Unexpired is not the same as fresh, and conflating them reopens replay one level up.**
+Binding the report to a challenge stops an old *report* being reused; it does nothing about
+an old *decision* being reused. A `TRUSTED` issued at app open and valid for an hour says
+nothing about the device thirty minutes later, when the user starts moving money.
+
+So the decision carries the challenge it answers, and the rule is:
+
+- **Ordinary use** accepts any unexpired decision.
+- **A sensitive action requires a decision whose `challenge` was issued for that action.**
+  Not merely unexpired — bound to a challenge minted for this operation.
+
+The backend is the authority on freshness. `expiresAtMillis` is the server's judgement, not
+a client-side timer, and the client may shorten it but never extend it.
 
 `INSUFFICIENT_EVIDENCE` is deliberately distinct from `UNAVAILABLE`: the first means the
 backend received a report it could not judge (low coverage, inconclusive everywhere), the
@@ -124,7 +142,14 @@ backend's decision, never a substitute for it, and the app must branch only on `
 
 **Replay.** Without a server challenge, a captured clean report is reusable forever. So the
 backend issues a nonce, the app passes it to `evaluate(challenge = nonce)`, and it is echoed
-in the report. That defeats naive replay.
+in the report.
+
+Precisely what that buys, since the distinction is easy to lose:
+
+| The challenge establishes | The challenge does **not** establish |
+|---|---|
+| this report was produced in response to this challenge | that anything in the report is true |
+| an old captured report cannot be resubmitted | that a hostile device did not fabricate a fresh one |
 
 **It does not defeat a compromised client, and nothing in this SDK can.** Our signals are
 unsigned claims from a device that may be hostile. A rooted device can send a perfect clean
@@ -179,8 +204,24 @@ Only `DECIDED(TRUSTED)`, unexpired, is trust — and it is trust the *server* gr
 ## Failure and latency
 
 The governing rule: **absence of a result never means trusted**, and **ordinary users are
-never blocked by integrity latency**. Those two pull against each other, and the resolution
-is per-action rather than global — see the unresolved decisions.
+never blocked by integrity latency**. These only look contradictory while the question is
+asked globally. Split by action sensitivity and both hold:
+
+| Situation | Ordinary use | Sensitive action |
+|---|---|---|
+| Evaluation pending | allow | wait, or evaluate now |
+| SDK unavailable | allow | fail closed |
+| Network unavailable | allow | fail closed |
+| Insufficient evidence | allow | do not approve |
+| Server timeout | allow | do not approve |
+| Server says `TRUSTED` | allow | allow, if the decision is *fresh* (§5) |
+| Server says `COMPROMISED` | restrict | reject |
+
+> **Do not punish ordinary users because security telemetry is slow; do not read missing
+> security evidence as proof of trust for security-sensitive operations.**
+
+Which operations count as sensitive is a product decision and belongs in a table the product
+owns — money movement, credential change and payee addition are the obvious candidates.
 
 | Case | Behaviour |
 |---|---|
@@ -200,16 +241,21 @@ is per-action rather than global — see the unresolved decisions.
 3. **No serialisation exists.** `IntegrityReport` has no wire form, and writing one is where
    coverage and `INCONCLUSIVE` are most likely to be quietly dropped.
 4. **No React Native module exists.** New surface, and the first non-Kotlin consumer.
+   Note that `integrations/react-native/integrity.d.ts` is currently prose that happens to
+   parse as TypeScript: no compiler checks it, so it can drift from the Kotlin it describes
+   and nothing will notice. **The implementation PR must bring `tsc --noEmit` into CI before
+   this contract is described as verified** — the same lesson as the detekt configuration
+   that reported zero findings while running a smaller ruleset than the one gating merges.
 5. **`integrity-attestation-play` is a stub.** §6 rests on it, so the security value of the
    whole pipeline is currently unimplemented — worth stating before anyone plans around it.
 
 ## Unresolved — these need answers before implementation
 
-1. **Fail-open or fail-closed, per action?** "Never block users" and "absence is not trust"
-   cannot both hold universally. Recommendation: low-risk actions proceed on `UNAVAILABLE`;
-   money movement and credential changes wait or degrade. **This is a product decision, not
-   an engineering one**, and it should be written down as a table of actions.
-2. **Freshness window** for a cached report, and for a backend decision.
+1. **Which operations are "sensitive"?** The behaviour is settled above; the list is not,
+   and it is a product decision rather than an engineering one.
+2. **Numeric freshness windows.** The mechanism is settled — server-authoritative
+   `expiresAtMillis`, challenge-bound decisions for sensitive actions — but the actual
+   durations are not.
 3. **Does the backend recompute scoring from signals, or consume `clientAdvisory`?**
    Recomputing is the only version that survives a hostile client.
 4. **Nonce lifetime and issuance** — per session, per sensitive action, or per app open?
