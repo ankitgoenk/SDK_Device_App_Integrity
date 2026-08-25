@@ -217,6 +217,21 @@ void malformedMappingTests() {
                "a buffer that ends after the start address is rejected without reading past it");
     }
 
+    // The same contract at the permission block, which needs its own case: a std::string
+    // keeps a readable NUL at [size()], so a one-byte overread of one of those is legal
+    // memory and invisible even to a sanitizer. This buffer ends exactly where the
+    // permissions are cut short, so a bounds check that admits three characters and reads
+    // four touches memory that is not ours.
+    {
+        const char cutInPermissions[] = {
+            '1', '0', '0', '0', '-', '2', '0', '0', '0', ' ', 'r', '-', '-',
+        };
+        integrity::MappedRange range3{};
+        expect(integrity::parseMapsLine(cutInPermissions, sizeof(cutInPermissions), &range3) ==
+                   integrity::kStatusParseFailed,
+               "a buffer cut inside the permission block is rejected without reading past it");
+    }
+
     // An address so long it would wrap must be refused, not truncated into something
     // plausible — a wrapped value is exactly how a bad line becomes a valid-looking range.
     const std::string overflowing = std::string(40, 'f') + "-bbbb r--p 0";
