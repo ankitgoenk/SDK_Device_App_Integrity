@@ -157,6 +157,13 @@ public abstract interface class io/integrity/core/ReportSink {
 	public abstract fun onReport (Lio/integrity/core/IntegrityReport;)V
 }
 
+public final class io/integrity/core/ReportWire {
+	public static final field INSTANCE Lio/integrity/core/ReportWire;
+	public static final field WIRE_VERSION I
+	public final fun canonicalJson (Lio/integrity/core/IntegrityReport;Ljava/lang/String;)Ljava/lang/String;
+	public static synthetic fun canonicalJson$default (Lio/integrity/core/ReportWire;Lio/integrity/core/IntegrityReport;Ljava/lang/String;ILjava/lang/Object;)Ljava/lang/String;
+}
+
 public final class io/integrity/core/Signal {
 	public synthetic fun <init> (Ljava/lang/String;Lio/integrity/core/Category;Lio/integrity/core/Confidence;Ljava/util/Map;IJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Lio/integrity/core/Category;Lio/integrity/core/Confidence;Ljava/util/Map;IJLkotlin/jvm/internal/DefaultConstructorMarker;)V
