@@ -360,6 +360,10 @@ void safeReadTests() {
            "a read that returns nothing is a failure, not an empty success");
 }
 
+// Defined below, next to the other synthetic-fixture helpers they belong with.
+bool writeFile(const char* path, const std::string& content);
+uint32_t countOurExecutableMappings();
+
 /** Deliberately never called. Its bytes exist only to be scribbled on and restored. */
 void aFunctionOnlyHereToBePatched() {
     volatile int keepMe = 0;
@@ -384,6 +388,15 @@ void selfTextMeasurementTests() {
 
     expect(clean.mappingsFound > 0, "an executable mapping for this module was located");
     expect(clean.bytesCompared > 0, "some bytes were actually compared");
+    // Not merely "more than nothing": a comparison that inspects one byte per chunk also
+    // reports more than nothing, and would agree with almost anything.
+    expect(clean.bytesCompared >= 4096, "a whole chunk at least was compared, not a token byte");
+    // And exactly our own module, counted separately from the measurement's own walk.
+    const uint32_t expectedMappings = countOurExecutableMappings();
+    if (expectedMappings > 0) {
+        expect(clean.mappingsFound == expectedMappings,
+               "every executable mapping of this module was inspected, and nothing else was");
+    }
     expect(clean.bytesDiffering == 0, "a clean process matches the file it was loaded from");
     std::printf("clean measurement: mappings=%u compared=%llu differing=%llu\n",
                 clean.mappingsFound,
@@ -437,6 +450,108 @@ void selfTextMeasurementTests() {
     expect(restored.bytesDiffering == 0, "restoring the byte restores the match");
 }
 
+/** Writes [content] to [path]. Returns false if the fixture could not be built. */
+bool writeFile(const char* path, const std::string& content) {
+    std::FILE* f = std::fopen(path, "wb");
+    if (f == nullptr) return false;
+    const size_t written = std::fwrite(content.data(), 1, content.size(), f);
+    std::fclose(f);
+    return written == content.size();
+}
+
+/**
+ * Counts the executable mappings backed by this module's own file, independently of the
+ * measurement.
+ *
+ * A separate walk rather than a call into the code under test: "it inspected everything it
+ * should" is only worth asserting against a number the measurement did not produce.
+ */
+uint32_t countOurExecutableMappings() {
+    const uintptr_t inside = reinterpret_cast<uintptr_t>(&integrity::measureSelfTextFrom);
+    std::FILE* maps = std::fopen("/proc/self/maps", "r");
+    if (maps == nullptr) return 0;
+
+    char line[512];
+    std::string ours;
+    while (std::fgets(line, sizeof(line), maps) != nullptr) {
+        integrity::MappedRange r{};
+        if (integrity::parseMapsLine(line, std::strlen(line), &r) != integrity::kStatusOk) continue;
+        if (r.executable && inside >= r.start && inside < r.end && r.pathLength > 0) {
+            ours.assign(line + r.pathOffset, r.pathLength);
+            break;
+        }
+    }
+    if (ours.empty()) {
+        std::fclose(maps);
+        return 0;
+    }
+
+    std::rewind(maps);
+    uint32_t count = 0;
+    while (std::fgets(line, sizeof(line), maps) != nullptr) {
+        integrity::MappedRange r{};
+        if (integrity::parseMapsLine(line, std::strlen(line), &r) != integrity::kStatusOk) continue;
+        if (r.executable && r.readable && r.pathLength > 0 &&
+            std::string(line + r.pathOffset, r.pathLength) == ours) {
+            ++count;
+        }
+    }
+    std::fclose(maps);
+    return count;
+}
+
+/**
+ * The measurement's failure paths, reached through synthetic mapping tables.
+ *
+ * Each of these is a way for the measurement to inspect nothing while looking successful,
+ * and none is reachable through a healthy /proc/self/maps — so without a seam they cannot
+ * be tested, and untested is where a wrong answer hides.
+ */
+void selfTextVacuityPaths() {
+    const uintptr_t inside = reinterpret_cast<uintptr_t>(&integrity::measureSelfTextFrom);
+
+    // A table that describes no mapping containing this code at all. The module cannot be
+    // identified, and that must not read as a clean result.
+    {
+        const char* mapsPath = "/tmp/integrity-test-maps-unrelated";
+        if (writeFile(mapsPath, "00001000-00002000 r-xp 00000000 fd:00 7 /nowhere/else.so\n")) {
+            integrity::SelfTextMeasurement out{};
+            expect(integrity::measureSelfTextFrom(mapsPath, &out) ==
+                       integrity::kStatusUnavailable,
+                   "a table with no mapping for this module is unavailable, not clean");
+            expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            std::remove(mapsPath);
+        } else {
+            std::printf("SKIPPED: could not write a synthetic maps table\n");
+        }
+    }
+
+    // A mapping whose file is too short to contain it. Every read returns end-of-file, so
+    // the comparison inspects nothing — which must be reported as unavailable rather than
+    // as a clean match.
+    {
+        const char* backingPath = "/tmp/integrity-test-tiny-backing";
+        const char* mapsPath = "/tmp/integrity-test-maps-short";
+        char line[512];
+        std::snprintf(line, sizeof(line),
+                      "%llx-%llx r-xp 00100000 fd:00 7 %s\n",
+                      static_cast<unsigned long long>(inside & ~static_cast<uintptr_t>(0xfff)),
+                      static_cast<unsigned long long>((inside & ~static_cast<uintptr_t>(0xfff)) + 0x1000),
+                      backingPath);
+        if (writeFile(backingPath, "tiny") && writeFile(mapsPath, line)) {
+            integrity::SelfTextMeasurement out{};
+            expect(integrity::measureSelfTextFrom(mapsPath, &out) ==
+                       integrity::kStatusUnavailable,
+                   "a mapping whose file cannot supply any bytes is unavailable, not clean");
+            expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            std::remove(mapsPath);
+            std::remove(backingPath);
+        } else {
+            std::printf("SKIPPED: could not write the short-backing fixture\n");
+        }
+    }
+}
+
 /** A path that is not a mapping table must be reported as unavailable, never as clean. */
 void selfTextFailurePaths() {
     integrity::SelfTextMeasurement out{};
@@ -460,6 +575,7 @@ int main() {
     safeReadTests();
     selfTextMeasurementTests();
     selfTextFailurePaths();
+    selfTextVacuityPaths();
 
     if (failures == 0) {
         // Printed so a 32-bit run is distinguishable from a 64-bit one in CI logs; the
