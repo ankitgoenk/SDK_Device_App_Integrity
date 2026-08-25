@@ -76,6 +76,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assemble testDebugUnitTest test lint
 
+      # A green `test` also describes a module that dropped out of the build, a misconfigured
+      # source set, or a suite filtered to nothing. The instrumented lanes have had a gate for
+      # this since the root job shipped running zero tests; the JVM lane never did. Naming the
+      # suites rather than asserting a total means a deleted suite fails here instead of
+      # quietly lowering a number nobody reads.
+      - name: Prove the intended unit tests actually ran
+        run: |
+          tools/check-unit-tests-ran.py \
+            io.integrity.core.RiskScorerTest \
+            io.integrity.core.ReportWireTest \
+            io.integrity.core.IntegrityReportTest \
+            io.integrity.core.DetectionEngineTest \
+            io.integrity.core.IntegrityGuardTest \
+            io.integrity.core.ReportCacheTest \
+            io.integrity.core.IntegrityConfigTest \
+            io.integrity.sample.backend.InMemoryChallengeStoreTest \
+            io.integrity.sample.backend.AntiVacuityTest
+
       - name: Assert the shipped .so is stripped, unexported, budgeted and hardened
         run: |
           set -euo pipefail
