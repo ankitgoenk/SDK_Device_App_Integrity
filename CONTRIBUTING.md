@@ -64,6 +64,19 @@ Three parts, all of them load-bearing:
 "I don't know" must never be able to masquerade as "everything is fine" — not in a report to
 the host app, and not in CI.
 
+**And the general form of all three: mutation testing.** Each rule above is a way of asking
+"did that test actually test anything?", and each has to be applied by hand, case by case.
+`tools/mutate-native.py` asks it mechanically: it breaks the native code in a specific way
+and requires the suite to notice. A mutant nothing catches is a hole in the tests, not a
+defect in the code, and the mutation score is the honest measure of the native suite — case
+counts are only an input to it. Adding a check that the property tests pass is easy; adding
+one that fails when the code is wrong is the point.
+
+Three configurations, because a defect can be invisible in two of them: plain, 32-bit (some
+bugs exist only at one pointer width), and AddressSanitizer (some changes return identical
+values for every input and are still memory-unsafe). The driver reports a mutant it could
+not try separately from one it failed to catch — untried is not uncaught.
+
 - [ ] Implementation in the correct module (native where a JVM implementation is trivially hookable)
 - [ ] `SignalId` constant with a stable string, plus a complete row in `docs/DETECTION_CATALOG.md`
 - [ ] Unit tests against fixtures in `integrity-testing/fixtures/`

@@ -145,7 +145,7 @@ jobs:
       - name: Prove the intended tests actually ran
         run: >-
           tools/check-instrumented-coverage.py
-          integrity-native integrity-detector-root sample-app
+          integrity-native integrity-detector-root integrity-detector-app sample-app
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -319,6 +319,44 @@ jobs:
       # — only the libc headers do. -nostdinc++ reproduces that in seconds here instead of
       # two minutes into an NDK build. Added after exactly this slipped through: the host
       # check used -fno-exceptions but still had libstdc++ headers on the include path.
+      # The property suite: a differential oracle and generators aimed at near-misses, at
+      # both widths. Deterministic — a failure prints the seed to replay it exactly.
+      - name: Build and run the native property tests
+        run: |
+          set -euo pipefail
+          for flags in "" "-m32"; do
+            g++ $flags -std=c++17 -Wall -Wextra -Werror -fno-exceptions \
+              -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+              integrity-native/src/main/cpp/selfcheck.cpp \
+              integrity-native/src/main/cpp/maps.cpp \
+              integrity-native/src/main/cpp/safe_read.cpp \
+              integrity-native/src/main/cpp/test/native_property_test.cpp \
+              -o /tmp/native_property_test
+            /tmp/native_property_test
+          done
+
+      # AddressSanitizer is not redundant with the above. Tightening the parser's bound to
+      # read one byte past the caller's buffer returns identical values for every input, so
+      # no assertion can see it — only a sanitizer can. /proc data is not NUL-terminated.
+      - name: Run the native tests under AddressSanitizer
+        run: |
+          set -euo pipefail
+          for t in native_host_test native_property_test; do
+            g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -fsanitize=address -g \
+              -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+              integrity-native/src/main/cpp/selfcheck.cpp \
+              integrity-native/src/main/cpp/maps.cpp \
+              integrity-native/src/main/cpp/safe_read.cpp \
+              "integrity-native/src/main/cpp/test/$t.cpp" -o /tmp/asan_$t
+            /tmp/asan_$t
+          done
+
+      # The gate that judges the two steps above. Everything else here asserts that correct
+      # code passes; this asserts that broken code fails, which is the only check that can
+      # tell a real suite from a vacuous one. A survivor is a hole in the tests.
+      - name: Require the tests to catch deliberately broken code
+        run: tools/mutate-native.py
+
       - name: Reject C++ standard library headers in shipped sources
         run: |
           set -euo pipefail
