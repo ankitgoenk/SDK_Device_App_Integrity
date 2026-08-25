@@ -62,6 +62,18 @@ Use `<stddef.h>`, `<stdint.h>`. This is enforced in CI by compiling each shipped
 with `-nostdinc++`, which reproduces the constraint in seconds rather than two minutes into
 an NDK build.
 
+**3b. Pointer width is part of the contract.** `uintptr_t` is 32-bit on `armeabi-v7a` and
+64-bit on `arm64-v8a`, and the overflow guards are the code most sensitive to that. The
+host tests use `UINTPTR_MAX` so they are width-correct, but they must also *run* at both
+widths — CI builds them `-m32` as well, and the pass line prints the width so a 32-bit run
+is distinguishable in the log.
+
+Anything sized differently across ABIs is part of this: `off_t` defaults to 32-bit *signed*
+on a 32-bit ABI, so an unsigned address at or above `0x80000000` would cast negative and
+`pread` would fail with `EINVAL` — reporting `kStatusUnavailable` for a valid address, and
+making a detector silently blind on the upper half of a 32-bit device's address space.
+`_FILE_OFFSET_BITS=64` fixes it and a `static_assert(sizeof(off_t) == 8)` keeps it fixed.
+
 **4. No dynamic allocation.** Fixed buffers, streamed reads with a hard cap. `STL=none`
 removes libc++'s `operator new` anyway, and an allocator in a security library is one more
 failure mode and one more thing to audit.

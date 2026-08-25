@@ -275,6 +275,27 @@ jobs:
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/integrity.cpp
 
+      # uintptr_t is 32-bit on armeabi-v7a and 64-bit on arm64-v8a, and the overflow
+      # guards are the code most sensitive to that difference. Every test so far has run
+      # at 64 bits — the x86_64 emulator included — so the width this SDK actually ships
+      # to on 32-bit devices had never executed these paths. gcc-multilib closes that in
+      # seconds; if it ever turns fragile, an armeabi-v7a on-device path is the more
+      # representative replacement.
+      - name: Install the 32-bit host toolchain
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-multilib g++-multilib
+
+      - name: Build and run the native host tests as 32-bit
+        run: |
+          set -euo pipefail
+          g++ -m32 -std=c++17 -Wall -Wextra -Werror \
+            -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+            integrity-native/src/main/cpp/selfcheck.cpp \
+            integrity-native/src/main/cpp/maps.cpp \
+            integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/test/native_host_test.cpp \
+            -o /tmp/native_host_test_32
+          /tmp/native_host_test_32
+
       # ANDROID_STL=none provides no libc++ at all, so <cstddef> and friends do not exist
       # — only the libc headers do. -nostdinc++ reproduces that in seconds here instead of
       # two minutes into an NDK build. Added after exactly this slipped through: the host

@@ -157,7 +157,10 @@ int main() {
     safeReadTests();
 
     if (failures == 0) {
-        std::printf("OK: native host tests passed\n");
+        // Printed so a 32-bit run is distinguishable from a 64-bit one in CI logs; the
+        // overflow guards behave differently at each width and both must be exercised.
+        std::printf("OK: native host tests passed (%zu-bit uintptr_t)\n",
+                    sizeof(uintptr_t) * 8);
     }
     return failures == 0 ? 0 : 1;
 }
