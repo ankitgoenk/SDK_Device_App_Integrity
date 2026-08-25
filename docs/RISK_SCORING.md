@@ -29,6 +29,38 @@ one category at 100 gives 100, and two independent categories at 40 give 64. Tha
 matters: it is why "two corroborating categories beat any single heuristic" falls out of the
 arithmetic rather than needing a special case.
 
+### The word "independent" is doing real work there
+
+Noisy-OR earns its corroboration property from independence, and nothing in the arithmetic
+checks that the inputs actually have it. Two signals that fail to the *same* cause are one
+signal wearing two hats, and combining them manufactures confidence that neither earned.
+
+This is not hypothetical. `HOOK_SELF_TEXT_MISMATCH` and the proposed `HOOK_PLT_GOT` both
+establish their evidence by reading this process's own memory through `pread`. An attacker
+who hooks `pread` — the cheapest bypass in either design — feeds both of them the original
+bytes at once:
+
+```
+                  ┌── HOOK_SELF_TEXT_MISMATCH ──┐
+hooked pread ─────┤                             ├──► both silent, together
+                  └── HOOK_PLT_GOT ─────────────┘
+```
+
+They are one **correlated evidence family**, not two votes. So:
+
+- **Before promoting any signal above `INFORMATIONAL`, name what it shares with the signals
+  already promoted** — the primitive it reads through, the file it trusts, the kernel
+  interface it depends on. Independence is a claim about failure modes, not about how
+  different two techniques look on paper.
+- Where a shared failure mode exists, the family should contribute as one input, not as
+  several. The current model has no way to express that, and it does not need one while
+  every hook signal is `INFORMATIONAL` and contributing zero. **It needs one before the
+  first promotion**, and discovering that afterwards would mean discovering it from a score
+  that was already wrong.
+- Two detectors sharing a bypass is still worth having: it raises the cost of a *silent*
+  hook, because the attacker must cover both shapes. What it does not do is raise
+  confidence when both stay quiet.
+
 ### Confidence multiplier
 
 | Confidence | Multiplier | Meaning |
