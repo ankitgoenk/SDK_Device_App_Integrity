@@ -101,6 +101,31 @@ better costume.
 **If `mprotect` on our own text is refused** on some image (W^X policy), the fixture cannot
 be built there and the test must say so — see §7 — rather than passing quietly.
 
+### Amendment, at implementation: the device fixture diverges the file, not the memory
+
+Implementing this found the cost of the paragraph above. An instrumented test cannot call
+`mprotect` itself, so patching our own `.text` on a device needs a **native entry point that
+makes this library's code writable** — an attack primitive shipped inside every host app.
+A debug-only flag is a weak boundary for an SDK whose entire job is integrity, so that
+primitive is not built.
+
+On a device the divergence is created on the other side instead: the mapped bytes are copied
+out, one is flipped, and the measurement is pointed at the copy through a synthetic mapping
+table. Memory is real and untouched; the file it is compared against is not the one it came
+from.
+
+**What this costs.** It does not exercise reading *modified memory* on a device.
+
+**What covers it.** The clean measurement already establishes that the memory read returns
+exactly the file's bytes — if it did not, the clean case could not report zero. And the host
+suite still performs the genuine `mprotect` self-patch, at both pointer widths and under
+AddressSanitizer.
+
+**What it adds to the shipped surface.** One read-only entry point, `measureSelfTextFrom`,
+which takes a mapping-table path and returns counts, never content. Smaller than a patching
+primitive by a wide margin, but it is still test-driven surface in production code, and it
+is recorded here rather than left to be discovered.
+
 ## 5. Known bypass — written before implementation
 
 A competent attacker defeats this check in at least six ways, and they are not equally hard:

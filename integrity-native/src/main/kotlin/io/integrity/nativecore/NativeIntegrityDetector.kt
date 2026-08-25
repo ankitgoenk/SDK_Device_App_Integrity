@@ -92,6 +92,7 @@ public object NativeDetectors {
     public fun all(expected: Boolean = true): List<Detector> = listOf(
         NativeIntegrityDetector(
             NativeCore(expectedByHost = expected, expectedToken = IntegrityReport.SDK_VERSION)
-        )
+        ),
+        SelfTextDetector()
     )
 }

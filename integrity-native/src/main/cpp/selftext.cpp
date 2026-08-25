@@ -42,6 +42,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
     out->bytesCompared = 0;
     out->bytesDiffering = 0;
     out->firstDifferenceAt = 0;
+    out->reason = kReasonNone;
 
     // The mapping containing this function belongs, by definition, to whatever module this
     // code was linked into. No name matching and no assumption about where the library
@@ -50,6 +51,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
 
     FILE* maps = fopen(mapsPath, "r");
     if (maps == nullptr) {
+        out->reason = kReasonMapsUnreadable;
         return kStatusUnavailable;
     }
 
@@ -80,6 +82,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
 
     if (!identified) {
         fclose(maps);
+        out->reason = kReasonSelfMappingNotFound;
         return kStatusUnavailable;
     }
 
@@ -106,6 +109,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
 
         const int fd = open(path, O_RDONLY | O_CLOEXEC);
         if (fd < 0) {
+            out->reason = kReasonLibraryFileUnreadable;
             status = kStatusUnavailable;
             break;
         }
@@ -117,6 +121,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
                 remaining < kChunkBytes ? static_cast<size_t>(remaining) : kChunkBytes;
 
             if (readSelfMemory(address, fromMemory, want) != kStatusOk) {
+                out->reason = kReasonMemoryUnreadable;
                 status = kStatusUnavailable;
                 break;
             }
@@ -124,6 +129,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
             const off_t at = static_cast<off_t>(range.fileOffset + (address - range.start));
             const ssize_t got = pread(fd, fromFile, want, at);
             if (got < 0) {
+                out->reason = kReasonLibraryFileUnreadable;
                 status = kStatusUnavailable;
                 break;
             }
@@ -161,6 +167,7 @@ NativeStatus measureSelfTextFrom(const char* mapsPath, SelfTextMeasurement* out)
     // "no differences" mean "no inspection", which is the whole failure this measurement
     // was written to rule out.
     if (out->mappingsFound == 0 || out->bytesCompared == 0) {
+        out->reason = kReasonNothingCompared;
         return kStatusUnavailable;
     }
     return kStatusOk;

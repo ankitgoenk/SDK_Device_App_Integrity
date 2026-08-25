@@ -43,6 +43,15 @@ public value class SignalId(public val value: String) {
         /** The loaded native library is not the one this build of the SDK ships. */
         public val APP_NATIVE_LIB_MISMATCH: SignalId = SignalId("APP_NATIVE_LIB_MISMATCH")
 
+        /**
+         * This SDK's own executable pages differ from the `.so` they were loaded from.
+         *
+         * Evidence consistent with post-load code modification. **Not proof of hooking,
+         * and its absence is not evidence of a clean process** — GOT/PLT redirection
+         * leaves `.text` untouched. See `docs/detectors/HOOK_SELF_TEXT_MISMATCH.md`.
+         */
+        public val HOOK_SELF_TEXT_MISMATCH: SignalId = SignalId("HOOK_SELF_TEXT_MISMATCH")
+
         // --- ROOT (phase 2) ---------------------------------------------------------
 
         /** A `su` or related binary exists in a world-readable system location. */

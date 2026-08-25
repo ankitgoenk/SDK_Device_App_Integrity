@@ -16,6 +16,23 @@
 
 namespace integrity {
 
+/**
+ * Why a measurement could not be made.
+ *
+ * Section 6 of the design requires these to be distinguishable rather than collapsing into
+ * one silence: "the mapping table was unreadable" and "this library's file would not open"
+ * are different facts about a device, and a detector that reports them identically cannot
+ * tell a hardened ROM from a broken install.
+ */
+enum SelfTextReason {
+    kReasonNone = 0,
+    kReasonMapsUnreadable = 1,
+    kReasonSelfMappingNotFound = 2,
+    kReasonLibraryFileUnreadable = 3,
+    kReasonMemoryUnreadable = 4,
+    kReasonNothingCompared = 5,
+};
+
 struct SelfTextMeasurement {
     /** Executable mappings belonging to this module that were located and opened. */
     uint32_t mappingsFound;
@@ -25,6 +42,8 @@ struct SelfTextMeasurement {
     uint64_t bytesDiffering;
     /** Offset within the mapping of the first difference; only meaningful when differing. */
     uint64_t firstDifferenceAt;
+    /** Set when the status is not kStatusOk. See [SelfTextReason]. */
+    uint32_t reason;
 };
 
 /**
