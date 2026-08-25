@@ -137,8 +137,10 @@ jobs:
           # The measurement's numbers go to logcat, so they are dumped into the job log
           # afterwards. A passing assertion proves differing == 0; the counts are what say
           # how much was actually inspected to reach it, and PR #12 exists to record them.
+          # The emulator action runs this with /usr/bin/sh, which is dash: no pipefail.
+          # set -eu is what dash supports, and -e is the part that matters here.
           script: |
-            set -euo pipefail
+            set -eu
             ./gradlew connectedDebugAndroidTest \
               -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
             adb logcat -d -s IntegritySelfText:I
@@ -262,7 +264,8 @@ jobs:
           script: |
             # set -e is load-bearing: these used to be joined with &&, and as plain lines a
             # failing test followed by a succeeding logcat dump would leave the job green.
-            set -euo pipefail
+            # -eu rather than -euo pipefail: this runs under dash, which has no pipefail.
+            set -eu
             ./gradlew :integrity-detector-root:connectedDebugAndroidTest \
               -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
             ./gradlew :integrity-native:connectedDebugAndroidTest
