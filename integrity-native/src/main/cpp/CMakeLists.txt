@@ -13,7 +13,8 @@ add_library(integrity SHARED
         integrity.cpp
         maps.cpp
         safe_read.cpp
-        selfcheck.cpp)
+        selfcheck.cpp
+        selftext.cpp)
 
 target_compile_definitions(integrity PRIVATE
         INTEGRITY_BUILD_TOKEN="${INTEGRITY_TOKEN}")

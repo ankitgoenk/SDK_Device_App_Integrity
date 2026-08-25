@@ -25,7 +25,7 @@ import sys
 import tempfile
 
 CPP = pathlib.Path(__file__).resolve().parent.parent / "integrity-native/src/main/cpp"
-SOURCES = ("selfcheck.cpp", "maps.cpp", "safe_read.cpp")
+SOURCES = ("selfcheck.cpp", "maps.cpp", "safe_read.cpp", "selftext.cpp")
 TESTS = ("test/native_host_test.cpp", "test/native_property_test.cpp")
 
 
@@ -52,14 +52,36 @@ MUTATIONS = (
              "empty number accepted as zero"),
     # --- maps.cpp: grammar and consistency ----------------------------------------------
     Mutation("maps.cpp", "if (end < start) {", "if (false) {", "inverted range accepted"),
-    Mutation("maps.cpp", "if (index + 4 > length) {", "if (index + 5 > length) {",
-             "permission-field length check off by one"),
+    # Deliberately the under-check rather than the over-check. Requiring one byte more
+    # (index + 5) became unobservable when the grammar grew a mandatory tail: the correct
+    # code accepts the permissions and then fails on the missing offset, so both reject the
+    # same inputs. Allowing one byte less reads past the buffer, which ASan sees.
+    Mutation("maps.cpp", "if (index + 4 > length) {", "if (index + 3 > length) {",
+             "permission-field length check reads one byte past the buffer"),
     Mutation("maps.cpp", "if (index >= length || line[index] != '-') {",
              "if (index > length || line[index] != '-') {", "separator bounds check off by one"),
     Mutation("maps.cpp", "(p != 'p' && p != 's')", "(p != 'p' && p != 's' && p != '-')",
              "private/shared flag accepts a third value"),
     Mutation("maps.cpp", "if (line == nullptr || out == nullptr || length == 0) {",
              "if (out == nullptr || length == 0) {", "null line no longer rejected"),
+    # --- maps.cpp: the file offset and path, which the mismatch check depends on --------
+    Mutation("maps.cpp", "out->fileOffset = fileOffset;", "out->fileOffset = 0;",
+             "file offset reported as zero, so every comparison starts at the wrong place"),
+    Mutation("maps.cpp", "out->pathLength = pathEnd > index ? pathEnd - index : 0;",
+             "out->pathLength = 0;", "path always reported absent"),
+    Mutation("maps.cpp", "while (pathEnd > index && (line[pathEnd - 1] == '\\n' || line[pathEnd - 1] == '\\r')) {",
+             "while (false) {", "line terminator left inside the path"),
+    Mutation("maps.cpp", "while (index < length && line[index] == ' ') {", "while (false) {",
+             "padding before the path not skipped"),
+    Mutation("maps.cpp", "if (index >= length || line[index] != ':') {", "if (false) {",
+             "device field accepted without its colon"),
+    Mutation("maps.cpp", "if (!parseDecimal(line, length, &index)) {", "if (false) {",
+             "inode field no longer required"),
+    Mutation("maps.cpp", "if (value > (UINTPTR_MAX - digit) / kDecimalBase) {", "if (false) {",
+             "decimal overflow guard removed"),
+    Mutation("maps.cpp", "return digits != 0;", "return true;",
+             "an empty inode accepted as valid"),
+
     # --- maps.cpp: rangeIsReadable, the total specification ------------------------------
     Mutation("maps.cpp", "if (address > UINTPTR_MAX - length) {", "if (false) {",
              "range overflow guard removed"),
@@ -88,6 +110,27 @@ MUTATIONS = (
     Mutation("safe_read.cpp", "return kStatusUnavailable;\n    }\n\n    NativeStatus status",
              "return kStatusOk;\n    }\n\n    NativeStatus status",
              "an unopenable /proc/self/mem reported as success"),
+    # --- selftext.cpp: the measurement, where a silent zero is the danger ---------------
+    Mutation("selftext.cpp", "if (out->mappingsFound == 0 || out->bytesCompared == 0) {",
+             "if (false) {", "having compared nothing reported as a clean result"),
+    Mutation("selftext.cpp", "if (fromMemory[i] != fromFile[i]) {", "if (false) {",
+             "comparison never finds a difference"),
+    Mutation("selftext.cpp", "if (fromMemory[i] != fromFile[i]) {", "if (true) {",
+             "comparison always finds a difference"),
+    Mutation("selftext.cpp", "for (size_t i = 0; i < comparable; ++i) {",
+             "for (size_t i = 0; i < 1; ++i) {", "only the first byte of each chunk compared"),
+    Mutation("selftext.cpp", "out->bytesCompared += comparable;", "out->bytesCompared += 1;",
+             "bytes compared over-reported as inspected"),
+    Mutation("selftext.cpp", "if (strcmp(path, ours) != 0) {", "if (false) {",
+             "mappings from other modules compared against our own file"),
+    Mutation("selftext.cpp", "if (!range.executable || !range.readable) {", "if (false) {",
+             "non-executable mappings inspected as if they were code"),
+    Mutation("selftext.cpp", "if (length == 0 || length + 1 > capacity) {", "if (false) {",
+             "path copied without a bounds check"),
+    Mutation("selftext.cpp", "return kStatusUnavailable;\n    }\n\n    rewind(maps);",
+             "return kStatusOk;\n    }\n\n    rewind(maps);",
+             "failing to identify our own module reported as success"),
+
     # --- selfcheck.cpp ------------------------------------------------------------------
     Mutation("selfcheck.cpp", "return difference == 0;", "return true;",
              "token comparison always succeeds"),
@@ -157,14 +200,19 @@ def build_and_run(work: pathlib.Path, binary: pathlib.Path,
         for test in TESTS:
             compiled = subprocess.run(
                 f"{COMPILE} {flag} {sources} {work / test} -o {binary}",
-                shell=True, capture_output=True, text=True,
+                shell=True, capture_output=True, text=True, errors="replace",
             )
             if compiled.returncode != 0:
                 return False, f"rejected at compile time ({width}, {pathlib.Path(test).name})"
 
             try:
+                # errors="replace" is load-bearing: a mutated parser can print the raw
+                # random bytes it was fed, and decoding those as UTF-8 raised, killing the
+                # whole run mid-way. The driver then reported no score at all rather than a
+                # kill — a tool that dies on its own findings is worse than one that misses
+                # them, because the output looks like it simply never ran.
                 ran = subprocess.run([str(binary)], capture_output=True, text=True,
-                                     timeout=RUN_TIMEOUT_SECONDS)
+                                     errors="replace", timeout=RUN_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 return False, f"hung ({width}, {pathlib.Path(test).name})"
             if ran.returncode != 0:

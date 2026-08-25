@@ -47,6 +47,16 @@ internal interface NativeApi {
      * 'couldn't verify' state".
      */
     fun probeMappedRead(): Int
+
+    /**
+     * Runs the self-text measurement, returning
+     * `[status, mappingsFound, bytesCompared, bytesDiffering, firstDifferenceAt]`.
+     *
+     * Counters rather than a verdict: this exists to establish whether a clean process has
+     * memory matching the file it was loaded from, and a boolean would have assumed the
+     * answer. `null` means the call itself failed.
+     */
+    fun measureSelfText(): LongArray?
 }
 
 internal object NativeBridge : NativeApi {
@@ -57,6 +67,8 @@ internal object NativeBridge : NativeApi {
 
     override fun probeMappedRead(): Int = nativeProbeMappedRead()
 
+    override fun measureSelfText(): LongArray? = nativeMeasureSelfText()
+
     // Registered dynamically in JNI_OnLoad, so the .so exports no Java_* symbol to grep
     // for. CI checks the released library for stray exports rather than trusting this
     // comment (ADR-0002).
@@ -65,6 +77,8 @@ internal object NativeBridge : NativeApi {
     private external fun nativeProbeUnmappedRead(): Int
 
     private external fun nativeProbeMappedRead(): Int
+
+    private external fun nativeMeasureSelfText(): LongArray?
 }
 
 /**
@@ -110,5 +124,12 @@ internal class NativeCore(
         // number rather than a plausible one.
         const val STATUS_UNAVAILABLE = 11
         const val STATUS_INTERNAL_ERROR = 13
+
+        // Indices into the array measureSelfText returns.
+        const val MEASURE_STATUS = 0
+        const val MEASURE_MAPPINGS = 1
+        const val MEASURE_BYTES_COMPARED = 2
+        const val MEASURE_BYTES_DIFFERING = 3
+        const val MEASURE_FIRST_DIFFERENCE = 4
     }
 }

@@ -8,7 +8,11 @@
 #include <cstring>
 #include <string>
 
+#include <sys/mman.h>
+#include <unistd.h>
+
 #include "../maps.h"
+#include "../selftext.h"
 #include "../safe_read.h"
 #include "../selfcheck.h"
 
@@ -124,6 +128,69 @@ void validMappingTests() {
     expect(parse("aaaa-bbbb rw-p 00000000 00:00 0", &anonymous) == integrity::kStatusOk,
            "an anonymous mapping with no path parses");
     expect(anonymous.writable && !anonymous.executable, "rw- is not executable");
+    expect(anonymous.pathLength == 0, "an anonymous mapping reports no path");
+    expect(anonymous.fileOffset == 0, "an anonymous mapping has no file offset");
+
+    // The file offset and the path, which comparing a mapping against its file depends on.
+    {
+        const std::string line =
+            "b6f2c000-b6f4d000 r-xp 0001f000 fd:00 1234  /data/app/lib/libintegrity.so";
+        integrity::MappedRange backed{};
+        expect(parse(line, &backed) == integrity::kStatusOk, "a file-backed mapping parses");
+        expect(backed.fileOffset == 0x1f000u, "the file offset is read, not assumed zero");
+        expect(line.substr(backed.pathOffset, backed.pathLength) ==
+                   "/data/app/lib/libintegrity.so",
+               "the path bounds select exactly the path, padding excluded");
+    }
+
+    // A pathname may contain spaces, so the path is everything after the padding rather
+    // than the next whitespace-delimited field.
+    {
+        const std::string spaced = "1000-2000 r--p 00000000 00:00 7 /data/a b/lib.so";
+        integrity::MappedRange withSpaces{};
+        expect(parse(spaced, &withSpaces) == integrity::kStatusOk, "a path with spaces parses");
+        expect(spaced.substr(withSpaces.pathOffset, withSpaces.pathLength) == "/data/a b/lib.so",
+               "a path containing a space is not truncated at it");
+    }
+
+    // /proc lines arrive with a terminator when read by line; it is not part of the path.
+    {
+        const std::string terminated = "1000-2000 r--p 00000000 00:00 7 /lib/x.so\n";
+        integrity::MappedRange nl{};
+        expect(parse(terminated, &nl) == integrity::kStatusOk, "a terminated line parses");
+        expect(terminated.substr(nl.pathOffset, nl.pathLength) == "/lib/x.so",
+               "the line terminator is not part of the path");
+    }
+
+    // Used to parse: the tail was ignored, so half a line looked like a whole mapping.
+    // Half a maps line is not evidence about a mapping.
+    expect(parse("aaaa-bbbb r--p 0", &range) == integrity::kStatusParseFailed,
+           "a line truncated after the permissions is a parse failure, not a partial success");
+    expect(parse("aaaa-bbbb r--p 00000000 00:00", &range) == integrity::kStatusParseFailed,
+           "a line missing the inode is a parse failure");
+    expect(parse("aaaa-bbbb r--p 00000000 0000 0", &range) == integrity::kStatusParseFailed,
+           "a device field with no colon is a parse failure");
+
+    // Otherwise well-formed lines with one number missing. The short garbage lines above
+    // stopped isolating this once the grammar grew: they now fail on the trailing fields
+    // instead, so a parser that read an absent number as zero would still be rejected —
+    // for the wrong reason, which is no test at all.
+    expect(parse("-bbbb r--p 00000000 00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent start address is not read as zero");
+    expect(parse("aaaa- r--p 00000000 00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent end address is not read as zero");
+    expect(parse("aaaa-bbbb r--p  00:00 0", &range) == integrity::kStatusParseFailed,
+           "an absent file offset is not read as zero");
+
+    // The inode is parsed and then discarded, which makes it easy to assume its bounds do
+    // not matter. They do: a number that wraps is a number we read wrongly, and a line
+    // carrying one did not come from the kernel. Checked the same way as the hex fields.
+    {
+        const std::string hugeInode =
+            "1000-2000 r--p 00000000 00:00 " + std::string(30, '9') + " /lib/x.so";
+        expect(parse(hugeInode, &range) == integrity::kStatusParseFailed,
+               "an inode too large to represent is rejected, not wrapped");
+    }
 }
 
 // Case 2: malformed input is rejected, never accepted-with-garbage.
@@ -164,6 +231,21 @@ void malformedMappingTests() {
                "a buffer that ends after the start address is rejected without reading past it");
     }
 
+    // The same contract at the permission block, which needs its own case: a std::string
+    // keeps a readable NUL at [size()], so a one-byte overread of one of those is legal
+    // memory and invisible even to a sanitizer. This buffer ends exactly where the
+    // permissions are cut short, so a bounds check that admits three characters and reads
+    // four touches memory that is not ours.
+    {
+        const char cutInPermissions[] = {
+            '1', '0', '0', '0', '-', '2', '0', '0', '0', ' ', 'r', '-', '-',
+        };
+        integrity::MappedRange range3{};
+        expect(integrity::parseMapsLine(cutInPermissions, sizeof(cutInPermissions), &range3) ==
+                   integrity::kStatusParseFailed,
+               "a buffer cut inside the permission block is rejected without reading past it");
+    }
+
     // An address so long it would wrap must be refused, not truncated into something
     // plausible — a wrapped value is exactly how a bad line becomes a valid-looking range.
     const std::string overflowing = std::string(40, 'f') + "-bbbb r--p 0";
@@ -184,8 +266,8 @@ void malformedMappingTests() {
 
 // Case 3: input that parses cleanly but is not safe to access.
 void unsafeRangeTests() {
-    const integrity::MappedRange readable{0x1000, 0x2000, true, false, false};
-    const integrity::MappedRange unreadable{0x1000, 0x2000, false, false, false};
+    const integrity::MappedRange readable{0x1000, 0x2000, true, false, false, 0, 0, 0};
+    const integrity::MappedRange unreadable{0x1000, 0x2000, false, false, false, 0, 0, 0};
 
     expect(integrity::rangeIsReadable(readable, 0x1000, 0x1000) == integrity::kStatusOk,
            "the whole mapping is readable");
@@ -278,6 +360,230 @@ void safeReadTests() {
            "a read that returns nothing is a failure, not an empty success");
 }
 
+// Defined below, next to the other synthetic-fixture helpers they belong with.
+bool writeFile(const char* path, const std::string& content);
+uint32_t countOurExecutableMappings();
+
+/** Deliberately never called. Its bytes exist only to be scribbled on and restored. */
+void aFunctionOnlyHereToBePatched() {
+    volatile int keepMe = 0;
+    (void)keepMe;
+}
+
+/**
+ * The clean-mismatch measurement, and the check that makes its result mean something.
+ *
+ * `bytesDiffering == 0` is worthless on its own: a comparison that inspects nothing, or one
+ * that is simply broken, reports exactly the same number. So the instrument is shown to
+ * register a difference before its zero is believed.
+ */
+void selfTextMeasurementTests() {
+    // Establish the prerequisites before deciding what a failure means. Skipping when the
+    // environment genuinely lacks the capability is right; skipping when it plainly has it
+    // is an escape hatch, and a measurement that quietly reports unavailable everywhere
+    // would slide straight through one. That is not hypothetical — it is what the mutant
+    // that compares other modules does, and this test used to pass against it.
+    std::FILE* probe = std::fopen("/proc/self/maps", "r");
+    const bool mapsReadable = probe != nullptr;
+    if (probe != nullptr) std::fclose(probe);
+
+    unsigned char ownByte = 0;
+    const bool memoryReadable =
+        integrity::readSelfMemory(reinterpret_cast<uintptr_t>(&selfTextMeasurementTests),
+                                  &ownByte, 1) == integrity::kStatusOk;
+
+    integrity::SelfTextMeasurement clean{};
+    const integrity::NativeStatus status = integrity::measureSelfText(&clean);
+
+    if (!mapsReadable || !memoryReadable) {
+        std::printf("SKIPPED: /proc/self/{maps,mem} unavailable here, the measurement was "
+                    "not exercised\n");
+        return;
+    }
+    // Both prerequisites hold, so unavailable is a defect rather than an environment.
+    expect(status == integrity::kStatusOk,
+           "the measurement completes where /proc/self/maps and /proc/self/mem both work");
+    if (status != integrity::kStatusOk) return;
+
+    expect(clean.mappingsFound > 0, "an executable mapping for this module was located");
+    expect(clean.bytesCompared > 0, "some bytes were actually compared");
+    // Not merely "more than nothing": a comparison that inspects one byte per chunk also
+    // reports more than nothing, and would agree with almost anything.
+    expect(clean.bytesCompared >= 4096, "a whole chunk at least was compared, not a token byte");
+    // And exactly our own module, counted separately from the measurement's own walk.
+    const uint32_t expectedMappings = countOurExecutableMappings();
+    if (expectedMappings > 0) {
+        expect(clean.mappingsFound == expectedMappings,
+               "every executable mapping of this module was inspected, and nothing else was");
+    }
+    expect(clean.bytesDiffering == 0, "a clean process matches the file it was loaded from");
+    std::printf("clean measurement: mappings=%u compared=%llu differing=%llu\n",
+                clean.mappingsFound,
+                static_cast<unsigned long long>(clean.bytesCompared),
+                static_cast<unsigned long long>(clean.bytesDiffering));
+
+    // Now break it, for real. Not a flag telling the measurement to report a difference:
+    // one byte of this process's own executable code is rewritten, which is the state an
+    // inline hook leaves behind.
+    unsigned char* target = reinterpret_cast<unsigned char*>(&aFunctionOnlyHereToBePatched);
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0) {
+        std::printf("SKIPPED: page size unknown, the patched case was not exercised\n");
+        return;
+    }
+    const uintptr_t page = reinterpret_cast<uintptr_t>(target) &
+                           ~(static_cast<uintptr_t>(pageSize) - 1);
+
+    if (mprotect(reinterpret_cast<void*>(page), static_cast<size_t>(pageSize),
+                 PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
+        std::printf("SKIPPED: this image refuses to make its own text writable, so the "
+                    "patched case was not exercised\n");
+        return;
+    }
+
+    const unsigned char original = *target;
+    *target = static_cast<unsigned char>(original ^ 0xff);
+    // Anti-vacuity: the fixture must be proven built. If the write silently did nothing,
+    // the failure below would read as "the measurement is broken" rather than "the patch
+    // never happened", and someone would spend a day debugging working code.
+    const bool patchLanded = (*target != original);
+
+    integrity::SelfTextMeasurement patched{};
+    const integrity::NativeStatus patchedStatus = integrity::measureSelfText(&patched);
+
+    *target = original;
+    mprotect(reinterpret_cast<void*>(page), static_cast<size_t>(pageSize),
+             PROT_READ | PROT_EXEC);
+
+    expect(patchLanded, "the fixture was built: this process's own text really was modified");
+    if (!patchLanded) return;
+
+    expect(patchedStatus == integrity::kStatusOk, "the measurement completed on patched text");
+    expect(patched.bytesDiffering > 0,
+           "a modified byte is seen, so the clean zero above is a result and not a silence");
+    expect(patched.bytesCompared > 0, "the patched run also compared something");
+
+    integrity::SelfTextMeasurement restored{};
+    expect(integrity::measureSelfText(&restored) == integrity::kStatusOk,
+           "the measurement still completes after restoring");
+    expect(restored.bytesDiffering == 0, "restoring the byte restores the match");
+}
+
+/** Writes [content] to [path]. Returns false if the fixture could not be built. */
+bool writeFile(const char* path, const std::string& content) {
+    std::FILE* f = std::fopen(path, "wb");
+    if (f == nullptr) return false;
+    const size_t written = std::fwrite(content.data(), 1, content.size(), f);
+    std::fclose(f);
+    return written == content.size();
+}
+
+/**
+ * Counts the executable mappings backed by this module's own file, independently of the
+ * measurement.
+ *
+ * A separate walk rather than a call into the code under test: "it inspected everything it
+ * should" is only worth asserting against a number the measurement did not produce.
+ */
+uint32_t countOurExecutableMappings() {
+    const uintptr_t inside = reinterpret_cast<uintptr_t>(&integrity::measureSelfTextFrom);
+    std::FILE* maps = std::fopen("/proc/self/maps", "r");
+    if (maps == nullptr) return 0;
+
+    char line[512];
+    std::string ours;
+    while (std::fgets(line, sizeof(line), maps) != nullptr) {
+        integrity::MappedRange r{};
+        if (integrity::parseMapsLine(line, std::strlen(line), &r) != integrity::kStatusOk) continue;
+        if (r.executable && inside >= r.start && inside < r.end && r.pathLength > 0) {
+            ours.assign(line + r.pathOffset, r.pathLength);
+            break;
+        }
+    }
+    if (ours.empty()) {
+        std::fclose(maps);
+        return 0;
+    }
+
+    std::rewind(maps);
+    uint32_t count = 0;
+    while (std::fgets(line, sizeof(line), maps) != nullptr) {
+        integrity::MappedRange r{};
+        if (integrity::parseMapsLine(line, std::strlen(line), &r) != integrity::kStatusOk) continue;
+        if (r.executable && r.readable && r.pathLength > 0 &&
+            std::string(line + r.pathOffset, r.pathLength) == ours) {
+            ++count;
+        }
+    }
+    std::fclose(maps);
+    return count;
+}
+
+/**
+ * The measurement's failure paths, reached through synthetic mapping tables.
+ *
+ * Each of these is a way for the measurement to inspect nothing while looking successful,
+ * and none is reachable through a healthy /proc/self/maps — so without a seam they cannot
+ * be tested, and untested is where a wrong answer hides.
+ */
+void selfTextVacuityPaths() {
+    const uintptr_t inside = reinterpret_cast<uintptr_t>(&integrity::measureSelfTextFrom);
+
+    // A table that describes no mapping containing this code at all. The module cannot be
+    // identified, and that must not read as a clean result.
+    {
+        const char* mapsPath = "/tmp/integrity-test-maps-unrelated";
+        if (writeFile(mapsPath, "00001000-00002000 r-xp 00000000 fd:00 7 /nowhere/else.so\n")) {
+            integrity::SelfTextMeasurement out{};
+            expect(integrity::measureSelfTextFrom(mapsPath, &out) ==
+                       integrity::kStatusUnavailable,
+                   "a table with no mapping for this module is unavailable, not clean");
+            expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            std::remove(mapsPath);
+        } else {
+            std::printf("SKIPPED: could not write a synthetic maps table\n");
+        }
+    }
+
+    // A mapping whose file is too short to contain it. Every read returns end-of-file, so
+    // the comparison inspects nothing — which must be reported as unavailable rather than
+    // as a clean match.
+    {
+        const char* backingPath = "/tmp/integrity-test-tiny-backing";
+        const char* mapsPath = "/tmp/integrity-test-maps-short";
+        char line[512];
+        std::snprintf(line, sizeof(line),
+                      "%llx-%llx r-xp 00100000 fd:00 7 %s\n",
+                      static_cast<unsigned long long>(inside & ~static_cast<uintptr_t>(0xfff)),
+                      static_cast<unsigned long long>((inside & ~static_cast<uintptr_t>(0xfff)) + 0x1000),
+                      backingPath);
+        if (writeFile(backingPath, "tiny") && writeFile(mapsPath, line)) {
+            integrity::SelfTextMeasurement out{};
+            expect(integrity::measureSelfTextFrom(mapsPath, &out) ==
+                       integrity::kStatusUnavailable,
+                   "a mapping whose file cannot supply any bytes is unavailable, not clean");
+            expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            std::remove(mapsPath);
+            std::remove(backingPath);
+        } else {
+            std::printf("SKIPPED: could not write the short-backing fixture\n");
+        }
+    }
+}
+
+/** A path that is not a mapping table must be reported as unavailable, never as clean. */
+void selfTextFailurePaths() {
+    integrity::SelfTextMeasurement out{};
+    expect(integrity::measureSelfTextFrom("/proc/self/no-such-maps", &out) ==
+               integrity::kStatusUnavailable,
+           "an unreadable mapping table is unavailable, not a clean result");
+    expect(out.bytesCompared == 0, "nothing is reported as compared when nothing was");
+    expect(integrity::measureSelfTextFrom(nullptr, &out) == integrity::kStatusInvalidInput,
+           "a null path is invalid input");
+    expect(integrity::measureSelfText(nullptr) == integrity::kStatusInvalidInput,
+           "a null result pointer is invalid input");
+}
+
 }  // namespace
 
 int main() {
@@ -286,6 +592,9 @@ int main() {
     malformedMappingTests();
     unsafeRangeTests();
     safeReadTests();
+    selfTextMeasurementTests();
+    selfTextFailurePaths();
+    selfTextVacuityPaths();
 
     if (failures == 0) {
         // Printed so a 32-bit run is distinguishable from a 64-bit one in CI logs; the

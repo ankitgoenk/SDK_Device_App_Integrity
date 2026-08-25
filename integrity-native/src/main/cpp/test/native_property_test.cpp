@@ -25,6 +25,30 @@ namespace {
 int failures = 0;
 int checks = 0;
 
+/**
+ * Renders an input safely for printing.
+ *
+ * Generated lines contain arbitrary bytes, and writing those to stdout produced a stream no
+ * UTF-8 consumer could read — which crashed the mutation driver mid-run rather than letting
+ * it record the kill. A failure report has to survive being read.
+ */
+std::string printable(const std::string& raw) {
+    static const char kHex[] = "0123456789abcdef";
+    std::string out;
+    for (size_t i = 0; i < raw.size() && i < 120; ++i) {
+        const unsigned char c = static_cast<unsigned char>(raw[i]);
+        if (c >= 0x20 && c < 0x7f) {
+            out += static_cast<char>(c);
+        } else {
+            out += "\\x";
+            out += kHex[c >> 4];
+            out += kHex[c & 0x0f];
+        }
+    }
+    if (raw.size() > 120) out += "...";
+    return out;
+}
+
 void expect(bool condition, const char* what) {
     ++checks;
     if (!condition) {
@@ -84,7 +108,7 @@ bool wouldWrap(uintptr_t address, size_t length) {
 // so a shared bug would have to be the same mistake made twice in two different shapes.
 // ---------------------------------------------------------------------------
 bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outEnd,
-                   bool* readable, bool* writable, bool* executable) {
+                   uintptr_t* outOffset, bool* readable, bool* writable, bool* executable) {
     const size_t dash = line.find('-');
     if (dash == std::string::npos || dash == 0) return false;
     for (size_t i = 0; i < dash; ++i) {
@@ -107,6 +131,50 @@ bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outE
     if (x != 'x' && x != '-') return false;
     if (p != 'p' && p != 's') return false;
 
+    // " <offset> <maj>:<min> <inode>". Split on spaces and check each field's shape, which
+    // is a different way of reading the grammar than the parser's index walk.
+    const size_t fieldsAt = space + 5;
+    if (fieldsAt >= line.size() || line[fieldsAt] != ' ') return false;
+
+    std::string rest = line.substr(fieldsAt + 1);
+    const size_t offsetEnd = rest.find(' ');
+    if (offsetEnd == std::string::npos || offsetEnd == 0) return false;
+    const std::string offsetText = rest.substr(0, offsetEnd);
+    for (char c : offsetText) {
+        if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
+    }
+    errno = 0;
+    const unsigned long long offset = std::strtoull(offsetText.c_str(), nullptr, 16);
+    if (errno == ERANGE || offset > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
+
+    rest = rest.substr(offsetEnd + 1);
+    const size_t deviceEnd = rest.find(' ');
+    if (deviceEnd == std::string::npos) return false;
+    const std::string device = rest.substr(0, deviceEnd);
+    const size_t colon = device.find(':');
+    if (colon == std::string::npos || colon == 0 || colon + 1 >= device.size()) return false;
+    for (size_t i = 0; i < device.size(); ++i) {
+        if (i == colon) continue;
+        if (!std::isxdigit(static_cast<unsigned char>(device[i]))) return false;
+    }
+    // Each half must also fit, which the parser checks per digit.
+    errno = 0;
+    if (std::strtoull(device.substr(0, colon).c_str(), nullptr, 16), errno == ERANGE) return false;
+    errno = 0;
+    if (std::strtoull(device.substr(colon + 1).c_str(), nullptr, 16), errno == ERANGE) return false;
+
+    rest = rest.substr(deviceEnd + 1);
+    size_t inodeDigits = 0;
+    while (inodeDigits < rest.size() &&
+           std::isdigit(static_cast<unsigned char>(rest[inodeDigits]))) {
+        ++inodeDigits;
+    }
+    if (inodeDigits == 0) return false;
+    errno = 0;
+    const unsigned long long inode =
+        std::strtoull(rest.substr(0, inodeDigits).c_str(), nullptr, 10);
+    if (errno == ERANGE || inode > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
+
     errno = 0;
     const unsigned long long start = std::strtoull(line.substr(0, dash).c_str(), nullptr, 16);
     if (errno == ERANGE || start > static_cast<unsigned long long>(UINTPTR_MAX)) return false;
@@ -117,6 +185,7 @@ bool oracleAccepts(const std::string& line, uintptr_t* outStart, uintptr_t* outE
 
     if (end < start) return false;
 
+    *outOffset = static_cast<uintptr_t>(offset);
     *outStart = static_cast<uintptr_t>(start);
     *outEnd = static_cast<uintptr_t>(end);
     *readable = (r == 'r');
@@ -188,7 +257,14 @@ std::string randomNearMiss() {
         randomBelow(4) == 0 ? kSharingAlphabet[randomBelow(5)] : (randomBelow(2) ? 'p' : 's'),
         '\0',
     };
-    std::string line = start + "-" + end + " " + perms + " 00000000 fd:00 1234 /lib/x.so";
+    // The trailing fields get their own variation: they are parsed and mostly discarded,
+    // which is exactly the kind of code whose bounds stop being tested.
+    const std::string offset = randomBelow(3) == 0 ? boundaryHex() : randomHex(1 + randomBelow(8));
+    const std::string inode = randomBelow(4) == 0
+        ? std::string(1 + randomBelow(30), '9')
+        : std::to_string(randomBelow(100000));
+    std::string line =
+        start + "-" + end + " " + perms + " " + offset + " fd:00 " + inode + " /lib/x.so";
 
     switch (randomBelow(10)) {
         case 0: return line;                                        // untouched
@@ -247,20 +323,23 @@ void parserMatchesAnIndependentOracle() {
 
         uintptr_t start = 0;
         uintptr_t end = 0;
+        uintptr_t offset = 0;
         bool r = false;
         bool w = false;
         bool x = false;
-        const bool oracle = oracleAccepts(line, &start, &end, &r, &w, &x);
+        const bool oracle = oracleAccepts(line, &start, &end, &offset, &r, &w, &x);
 
         if (parsed != oracle) {
             std::printf("FAIL: parser said %d, oracle said %d, for: %s\n",
-                        static_cast<int>(parsed), static_cast<int>(oracle), line.c_str());
+                        static_cast<int>(parsed), static_cast<int>(oracle), printable(line).c_str());
             ++failures;
             return;
         }
         if (parsed && (range.start != start || range.end != end || range.readable != r ||
-                       range.writable != w || range.executable != x)) {
-            std::printf("FAIL: parser and oracle disagree on the values for: %s\n", line.c_str());
+                       range.writable != w || range.executable != x ||
+                       range.fileOffset != offset)) {
+            std::printf("FAIL: parser and oracle disagree on the values for: %s\n",
+                    printable(line).c_str());
             ++failures;
             return;
         }
@@ -277,7 +356,7 @@ void anAcceptedRangeIsNeverInverted() {
             continue;
         }
         if (range.end < range.start) {
-            std::printf("FAIL: accepted an inverted range from: %s\n", line.c_str());
+            std::printf("FAIL: accepted an inverted range from: %s\n", printable(line).c_str());
             ++failures;
             return;
         }
@@ -301,6 +380,9 @@ void rangeValidationMatchesItsSpecification() {
             randomBelow(2) == 0,
             randomBelow(2) == 0,
             randomBelow(2) == 0,
+            0,
+            0,
+            0,
         };
         const uintptr_t address = randomAddress();
         const size_t length = randomBelow(2) ? randomBelow(96) : randomBelow(4096);
@@ -384,7 +466,7 @@ void onlyTheExactTokenVerifies() {
         if (candidate == token) continue;
 
         if (integrity::verifyBuildToken(candidate.c_str()) == integrity::kOk) {
-            std::printf("FAIL: '%s' verified as the build token\n", candidate.c_str());
+            std::printf("FAIL: '%s' verified as the build token\n", printable(candidate).c_str());
             ++failures;
             return;
         }
