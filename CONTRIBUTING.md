@@ -35,10 +35,41 @@ risk and a known bypass, and at least one unit test must reference the signal by
 The rest is review, because a checker that guessed at them would only teach people how to
 satisfy the checker.
 
+### Testing around the "couldn't verify" state
+
+Every detector has a state meaning *I could not check this*: `Confidence.INCONCLUSIVE` in
+Kotlin, `kStatusUnavailable` in native. Hard rule 2 requires it and it is the right default —
+but it gives every detector a safe-looking state that a **bug** can produce just as easily as
+a legitimate one, and ordinary tests cannot tell the two apart.
+
+A test asserting `INCONCLUSIVE` where the check legitimately cannot run passes whether the
+detector works or not. The suite stays green while the detector has quietly stopped
+detecting. This is not hypothetical: `off_t` truncation on 32-bit ABIs did exactly this to
+`readSelfMemory`, and the entire native suite passed with the bug present (ADR-0005, 3b).
+
+So, wherever a bug would produce the same result as a legitimate "couldn't verify":
+
+> **Assert a relative property proving the check succeeds when it should, rather than merely
+> asserting the failure is absent.**
+
+Three parts, all of them load-bearing:
+
+1. **Prove the positive.** Where the check *can* run, assert the conclusive result — not the
+   absence of a failure.
+2. **Guard against vacuity.** If the assertion is conditional, assert that its precondition
+   actually held. A conditional check that silently skips is a green result proving nothing.
+3. **Make skips visible.** When a check legitimately cannot run, say so in the output, so a
+   run where the property was exercised is distinguishable from one where it was not.
+
+"I don't know" must never be able to masquerade as "everything is fine" — not in a report to
+the host app, and not in CI.
+
 - [ ] Implementation in the correct module (native where a JVM implementation is trivially hookable)
 - [ ] `SignalId` constant with a stable string, plus a complete row in `docs/DETECTION_CATALOG.md`
 - [ ] Unit tests against fixtures in `integrity-testing/fixtures/`
 - [ ] Instrumented test: one positive condition, one clean condition
+- [ ] Where a bug would return the same result as a legitimate "couldn't verify", a
+      relative property proves the check actually ran (see above)
 - [ ] Default weight is conservative (new signals ship `INFORMATIONAL` until shadow-mode data
       supports promotion)
 - [ ] Per-detector budget respected; no main-thread IO; cancellation-aware
@@ -57,9 +88,10 @@ satisfy the checker.
 1. Could this signal fire on a legitimate user? Who?
 2. Is the check implemented at the layer that is hardest to hook for its value?
 3. Does failure degrade to `INCONCLUSIVE` rather than silently to "clean"?
-4. Does the evidence map contain anything that could identify a person or device?
-5. Is the worst-case runtime bounded, and is the budget realistic on a low-end device?
-6. Does the catalog entry describe a known bypass honestly?
+4. Could a bug in this detector return `INCONCLUSIVE` too — and would any test notice?
+5. Does the evidence map contain anything that could identify a person or device?
+6. Is the worst-case runtime bounded, and is the budget realistic on a low-end device?
+7. Does the catalog entry describe a known bypass honestly?
 
 ## Security issues
 
