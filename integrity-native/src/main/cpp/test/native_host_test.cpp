@@ -23,6 +23,24 @@ void expect(bool condition, const char* what) {
     }
 }
 
+// Address fixtures have to be width-dependent, and that is the point rather than an
+// inconvenience: a 32-bit process never sees a 48-bit address in its own maps, and its
+// uintptr_t could not hold one. Weakening the assertion to something both widths satisfy
+// would test neither. Each width gets the address range it actually has.
+#if UINTPTR_MAX > 0xffffffffu
+const char* const kMappingLine =
+    "7f8a2c000000-7f8a2c021000 r-xp 00000000 fd:00 1234  /system/lib64/libc.so";
+const uintptr_t kMappingStart = 0x7f8a2c000000ull;
+const uintptr_t kMappingEnd = 0x7f8a2c021000ull;
+#else
+// Deliberately above 0x80000000: this is where armeabi-v7a actually maps libc, and it is
+// the half of the address space the off_t bug silently lost.
+const char* const kMappingLine =
+    "b6f2c000-b6f4d000 r-xp 00000000 fd:00 1234  /system/lib/libc.so";
+const uintptr_t kMappingStart = 0xb6f2c000u;
+const uintptr_t kMappingEnd = 0xb6f4d000u;
+#endif
+
 integrity::NativeStatus parse(const std::string& line, integrity::MappedRange* out) {
     return integrity::parseMapsLine(line.c_str(), line.size(), out);
 }
@@ -53,10 +71,8 @@ void buildTokenTests() {
 // Case 1: a valid mapping parses.
 void validMappingTests() {
     integrity::MappedRange range{};
-    expect(parse("7f8a2c000000-7f8a2c021000 r-xp 00000000 fd:00 1234  /system/lib64/libc.so",
-                 &range) == integrity::kStatusOk,
-           "a real maps line parses");
-    expect(range.start == 0x7f8a2c000000ull && range.end == 0x7f8a2c021000ull,
+    expect(parse(kMappingLine, &range) == integrity::kStatusOk, "a real maps line parses");
+    expect(range.start == kMappingStart && range.end == kMappingEnd,
            "the address range is read correctly");
     expect(range.readable && range.executable && !range.writable,
            "permissions are read correctly");
@@ -99,6 +115,17 @@ void malformedMappingTests() {
     const std::string overflowing = std::string(40, 'f') + "-bbbb r--p 0";
     expect(parse(overflowing, &range) == integrity::kStatusParseFailed,
            "an address that would overflow is rejected");
+
+#if UINTPTR_MAX <= 0xffffffffu
+    // The realistic version of the same wrap. A 64-bit maps line is not garbage — it is
+    // exactly what a 64-bit process emits — but it cannot fit a 32-bit uintptr_t. Truncating
+    // 0x7f8a2c000000 yields 0x2c000000: a plausible address in a completely different
+    // mapping, which is far more dangerous than an obviously bad one. It must be refused.
+    integrity::MappedRange tooWide{};
+    expect(parse("7f8a2c000000-7f8a2c021000 r-xp 00000000 fd:00 1234  /system/lib64/libc.so",
+                 &tooWide) == integrity::kStatusParseFailed,
+           "a 64-bit address is refused on a 32-bit build, never truncated");
+#endif
 }
 
 // Case 3: input that parses cleanly but is not safe to access.
@@ -132,6 +159,36 @@ void safeReadTests() {
     expect(ok == integrity::kStatusOk || ok == integrity::kStatusUnavailable,
            "reading our own text either works or reports unavailable, never crashes");
 
+    // The off_t regression this build width exists to catch, asserted directly. Nothing else
+    // here catches it: an address above the sign boundary casts to a negative file offset,
+    // pread fails with EINVAL, and readSelfMemory reports kStatusUnavailable — which is also
+    // the correct answer for an unmapped address, so every existing assertion stays green
+    // while half the address space silently stops being readable.
+    //
+    // Stated as a relative property so it cannot be flaky: /proc/self/mem may be restricted
+    // in some environments, and then neither read succeeds and there is nothing to compare.
+    // But if a low address can be read at all, a high one must be readable too.
+    unsigned char onTheStack = 0;
+    const uintptr_t stack = reinterpret_cast<uintptr_t>(&onTheStack);
+    const uintptr_t lower = stack < own ? stack : own;
+    const uintptr_t higher = stack < own ? own : stack;
+
+    if (integrity::readSelfMemory(lower, buffer, sizeof(buffer)) == integrity::kStatusOk) {
+        expect(integrity::readSelfMemory(higher, buffer, sizeof(buffer)) == integrity::kStatusOk,
+               "a high address reads as well as a low one (off_t must not truncate)");
+    } else {
+        // Skipping is legitimate, staying quiet about it is not: a green log would otherwise
+        // be indistinguishable from one where this property was actually exercised.
+        std::printf("SKIPPED: /proc/self/mem unreadable here, off_t property not exercised\n");
+    }
+
+#if UINTPTR_MAX <= 0xffffffffu
+    // And the check above must not quietly become vacuous: on 32 bits the stack sits near
+    // 0xff000000, so if no address here crosses the boundary, the test is not testing it.
+    expect(higher > (UINTPTR_MAX / 2),
+           "the 32-bit run must exercise an address above the off_t sign boundary");
+#endif
+
     expect(integrity::readSelfMemory(0, buffer, sizeof(buffer)) == integrity::kStatusUnavailable,
            "reading the null page reports unavailable rather than faulting");
     expect(integrity::readSelfMemory(0xdead0000ull, buffer, sizeof(buffer)) ==
@@ -157,7 +214,10 @@ int main() {
     safeReadTests();
 
     if (failures == 0) {
-        std::printf("OK: native host tests passed\n");
+        // Printed so a 32-bit run is distinguishable from a 64-bit one in CI logs; the
+        // overflow guards behave differently at each width and both must be exercised.
+        std::printf("OK: native host tests passed (%zu-bit uintptr_t)\n",
+                    sizeof(uintptr_t) * 8);
     }
     return failures == 0 ? 0 : 1;
 }
