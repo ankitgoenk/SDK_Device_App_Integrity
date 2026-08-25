@@ -155,23 +155,21 @@ SDK's own robustness problem masquerades as a device-integrity signal.
 
 ### Phase 3b prerequisites — settle these before writing detection code
 
-**1. The size/exception trade, measured rather than argued.** The library is at 219 KB of a
-256 KB budget for one string comparison. Build and record the arm64-v8a size for three
-configurations before choosing:
+**1. The size/exception trade — measured, decided, recorded.** Done. arm64-v8a release
+stripped: 219,472 B with exceptions, 217,944 B without `<stdexcept>`, 5,528 B with
+`STL=none -fno-exceptions`. Dropping `<stdexcept>` saves 0.7%; the cost is exception
+support itself. ADR-0005 adopts the third option and defines the failure model that
+replaces it. **Implement the failure model before flipping the build configuration** —
+otherwise the change reads as "we removed the safety net" rather than "we replaced it with
+one that covers the hazard we actually have".
 
-| Configuration | Containment | Size |
-| --- | --- | --- |
-| `c++_static` + `<stdexcept>` (today) | `catch (...)` plus thrown `std::runtime_error` | 219 KB |
-| `c++_static`, no `<stdexcept>` | `catch (...)` only, status codes for our own errors | ? |
-| `-fno-exceptions`, `ANDROID_STL=none` | status codes only, no unwinding | ? |
+Order of work:
 
-The middle row is the one worth measuring first, and it is missing from the obvious
-"exceptions or not" framing. Most of that 219 KB is probably not exception support as such
-but the libc++ that `std::runtime_error` drags in — `std::string`, RTTI, the lot. Keeping
-`catch (...)` while never throwing an STL type may buy most of the space at none of the
-cost. Measure it; do not reason about it.
-
-Whatever wins, record the number and the reason, because phase 3b spends the remainder.
+1. Native status contract and validated reads (ADR-0005 points 1–4).
+2. Replace `provokeFailure()` with a malformed-`/proc` fixture driving the real parser.
+3. CI proves the failure model: bad input yields a status code, the host survives.
+4. Only then switch to `STL=none -fno-exceptions`, and re-verify AAR, emulator, consumer.
+5. Only then the first `HOOK_*` detector.
 
 **2. Make `APP_NATIVE_LIB_MISMATCH` diagnosable.** Report the expected and actual tokens.
 They are SDK version strings, not secrets, and an attacker reads them out of the `.so`
