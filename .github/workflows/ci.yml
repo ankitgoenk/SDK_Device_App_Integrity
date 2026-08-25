@@ -137,13 +137,15 @@ jobs:
           # The measurement's numbers go to logcat, so they are dumped into the job log
           # afterwards. A passing assertion proves differing == 0; the counts are what say
           # how much was actually inspected to reach it, and PR #12 exists to record them.
-          # The emulator action runs this with /usr/bin/sh, which is dash: no pipefail.
-          # set -eu is what dash supports, and -e is the part that matters here.
-          script: |
-            set -eu
-            ./gradlew connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
-            adb logcat -d -s IntegritySelfText:I
+          # One folded command chained with &&, which is the form this action reliably
+          # runs. A multi-line script here went wrong twice: set -euo pipefail is invalid
+          # under dash, and the continuations confused Gradle's argument parsing. && also
+          # makes the failure propagate without depending on any shell option, so the
+          # logcat dump at the end cannot mask a failing test.
+          script: >-
+            ./gradlew connectedDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
+            && adb logcat -d -s IntegritySelfText:I
 
       # connectedAndroidTest reports success when it runs zero tests, so this job used to
       # pass while executing no root tests at all: the module's only instrumented test was
@@ -261,15 +263,13 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis_playstore
-          script: |
-            # set -e is load-bearing: these used to be joined with &&, and as plain lines a
-            # failing test followed by a succeeding logcat dump would leave the job green.
-            # -eu rather than -euo pipefail: this runs under dash, which has no pipefail.
-            set -eu
-            ./gradlew :integrity-detector-root:connectedDebugAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
-            ./gradlew :integrity-native:connectedDebugAndroidTest
-            adb logcat -d -s IntegritySelfText:I
+          # && throughout, so a failing suite cannot hide behind the logcat dump that
+          # follows it. See the note in the instrumented job about multi-line scripts here.
+          script: >-
+            ./gradlew :integrity-detector-root:connectedDebugAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
+            && ./gradlew :integrity-native:connectedDebugAndroidTest
+            && adb logcat -d -s IntegritySelfText:I
 
       # An annotation filter that matched nothing would make this negative control pass
       # without ever running on the clean image — the strongest possible "no root signals
