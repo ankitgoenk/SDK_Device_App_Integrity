@@ -179,14 +179,19 @@ def build_and_run(work: pathlib.Path, binary: pathlib.Path,
         for test in TESTS:
             compiled = subprocess.run(
                 f"{COMPILE} {flag} {sources} {work / test} -o {binary}",
-                shell=True, capture_output=True, text=True,
+                shell=True, capture_output=True, text=True, errors="replace",
             )
             if compiled.returncode != 0:
                 return False, f"rejected at compile time ({width}, {pathlib.Path(test).name})"
 
             try:
+                # errors="replace" is load-bearing: a mutated parser can print the raw
+                # random bytes it was fed, and decoding those as UTF-8 raised, killing the
+                # whole run mid-way. The driver then reported no score at all rather than a
+                # kill — a tool that dies on its own findings is worse than one that misses
+                # them, because the output looks like it simply never ran.
                 ran = subprocess.run([str(binary)], capture_output=True, text=True,
-                                     timeout=RUN_TIMEOUT_SECONDS)
+                                     errors="replace", timeout=RUN_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 return False, f"hung ({width}, {pathlib.Path(test).name})"
             if ran.returncode != 0:

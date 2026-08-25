@@ -25,6 +25,30 @@ namespace {
 int failures = 0;
 int checks = 0;
 
+/**
+ * Renders an input safely for printing.
+ *
+ * Generated lines contain arbitrary bytes, and writing those to stdout produced a stream no
+ * UTF-8 consumer could read — which crashed the mutation driver mid-run rather than letting
+ * it record the kill. A failure report has to survive being read.
+ */
+std::string printable(const std::string& raw) {
+    static const char kHex[] = "0123456789abcdef";
+    std::string out;
+    for (size_t i = 0; i < raw.size() && i < 120; ++i) {
+        const unsigned char c = static_cast<unsigned char>(raw[i]);
+        if (c >= 0x20 && c < 0x7f) {
+            out += static_cast<char>(c);
+        } else {
+            out += "\\x";
+            out += kHex[c >> 4];
+            out += kHex[c & 0x0f];
+        }
+    }
+    if (raw.size() > 120) out += "...";
+    return out;
+}
+
 void expect(bool condition, const char* what) {
     ++checks;
     if (!condition) {
@@ -300,14 +324,15 @@ void parserMatchesAnIndependentOracle() {
 
         if (parsed != oracle) {
             std::printf("FAIL: parser said %d, oracle said %d, for: %s\n",
-                        static_cast<int>(parsed), static_cast<int>(oracle), line.c_str());
+                        static_cast<int>(parsed), static_cast<int>(oracle), printable(line).c_str());
             ++failures;
             return;
         }
         if (parsed && (range.start != start || range.end != end || range.readable != r ||
                        range.writable != w || range.executable != x ||
                        range.fileOffset != offset)) {
-            std::printf("FAIL: parser and oracle disagree on the values for: %s\n", line.c_str());
+            std::printf("FAIL: parser and oracle disagree on the values for: %s\n",
+                    printable(line).c_str());
             ++failures;
             return;
         }
@@ -324,7 +349,7 @@ void anAcceptedRangeIsNeverInverted() {
             continue;
         }
         if (range.end < range.start) {
-            std::printf("FAIL: accepted an inverted range from: %s\n", line.c_str());
+            std::printf("FAIL: accepted an inverted range from: %s\n", printable(line).c_str());
             ++failures;
             return;
         }
@@ -434,7 +459,7 @@ void onlyTheExactTokenVerifies() {
         if (candidate == token) continue;
 
         if (integrity::verifyBuildToken(candidate.c_str()) == integrity::kOk) {
-            std::printf("FAIL: '%s' verified as the build token\n", candidate.c_str());
+            std::printf("FAIL: '%s' verified as the build token\n", printable(candidate).c_str());
             ++failures;
             return;
         }
