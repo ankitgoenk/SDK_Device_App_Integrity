@@ -76,7 +76,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assemble testDebugUnitTest test lint
 
-      - name: Assert the shipped .so is stripped, unexported and within budget
+      - name: Assert the shipped .so is stripped, unexported, budgeted and hardened
         run: |
           set -euo pipefail
           # Assert on the AAR, not on build intermediates. Globbing intermediates picks up
@@ -91,18 +91,7 @@ jobs:
           echo "shipped ABIs: ${#libs[@]}"
           test "${#libs[@]}" -eq 3
           for so in "${libs[@]}"; do
-            size=$(stat -c%s "$so")
-            echo "--- $so ($size bytes)"
-            # ADR-0002: dynamic registration, so no greppable Java_* entry points.
-            if nm -D --defined-only "$so" 2>/dev/null | grep -q 'Java_io_integrity'; then
-              echo "FAIL: $so exports a Java_io_integrity_* symbol"; exit 1
-            fi
-            if readelf -S "$so" | grep -q '\.debug_info'; then
-              echo "FAIL: $so is not stripped"; exit 1
-            fi
-            if [ "$size" -gt 262144 ]; then
-              echo "FAIL: $so exceeds the 256 KB per-ABI budget"; exit 1
-            fi
+            tools/check-native-hardening.sh "$so"
           done
 
   instrumented:
