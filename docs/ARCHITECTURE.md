@@ -35,7 +35,8 @@
 
 | Module | Type | Contents |
 | --- | --- | --- |
-| `integrity-core` | android-library | Public API, data model, `DetectionEngine`, scoring, cache, `Detector`/`ReportSink` SPI. **No detectors.** |
+| `integrity-model` | jvm | Data model (`Signal`, `SignalId`, `Verdict`, `IntegrityReport`), `Policy`, `RiskScorer`, canonical wire form. **No Android dependency** — the backend consumes this artifact, so client and server score with one implementation rather than two that must agree. |
+| `integrity-core` | android-library | Public API, `DetectionEngine`, cache, `Detector`/`ReportSink` SPI. Re-exports `integrity-model` via `api`. **No detectors.** |
 | `integrity-native` | android-library + CMake | JNI core: `/proc` scanning, memory and code-integrity checks, obfuscated string vault. Single exported JNI entry point. |
 | `integrity-detector-root` | android-library | `ROOT_*` signals |
 | `integrity-detector-hooking` | android-library | `HOOK_*` signals (JVM half; delegates to `integrity-native`) |
@@ -48,7 +49,15 @@
 | `sample-backend` | jvm | Nonce issuance, report verification, decision endpoint |
 
 **Dependency rule:** detectors depend on `integrity-core`; `integrity-core` never depends on
-a detector. Registration happens at init via explicit factories (no reflection, no
+a detector. `integrity-model` sits below `integrity-core` and depends on nothing but the
+Kotlin stdlib — it is the one module that must stay buildable with no Android SDK present,
+because a JVM backend cannot consume an AAR. Adding an Android import to it is not a compile
+error you will see locally if you build the whole project on a machine with the SDK
+installed; CI's jvm module is what catches it.
+
+`integrity-model` keeps the `io.integrity.core` package deliberately, so the split is
+invisible to consumers. That makes it a split package across two published artifacts: the
+cost of not renaming every import for a move that changes no behaviour. Registration happens at init via explicit factories (no reflection, no
 ServiceLoader — both are trivially strippable and slow).
 
 ```kotlin

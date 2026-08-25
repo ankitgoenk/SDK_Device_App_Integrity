@@ -100,9 +100,25 @@ jobs:
       - name: Assert the shipped SDK cannot name a networking API
         run: |
           set -euo pipefail
-          for aar in $(find . -path '*/build/outputs/aar/*-release.aar' -not -path './sample*'); do
-            tools/check-no-network.sh "$aar"
-          done
+          tools/check-no-network.sh --self-test
+          # integrity-model publishes a jar, not an aar. The aar-only glob left the one module
+          # whose whole purpose is to be consumed by a server outside the gate that says the
+          # SDK performs no network IO. integrity-baseline-plugin is a jar too and is covered
+          # deliberately: it is published, so "nothing shipped" should mean it.
+          mapfile -t artifacts < <(
+            find . \( -path '*/build/outputs/aar/*-release.aar' \
+                   -o \( -path '*/build/libs/*.jar' -not -name '*-sources.jar' \
+                                                    -not -name '*-javadoc.jar' \) \) \
+                 -not -path './sample*' -not -path './build-logic/*' | sort
+          )
+          # A find that matches nothing would otherwise pass a zero-length list and succeed.
+          test "${#artifacts[@]}" -ge 2 \
+            || { echo "gate found ${#artifacts[@]} artifact(s); expected >= 2" >&2; exit 1; }
+          # One invocation, so the closing "nothing shipped can name a networking API" is
+          # printed once and is true of everything inspected. Called per artifact it printed
+          # that global claim after each one, having checked only that one.
+          tools/check-no-network.sh "${artifacts[@]}"
+          echo "no-network gate inspected ${#artifacts[@]} shipped artifact(s)"
 
   instrumented:
     name: Instrumented smoke test

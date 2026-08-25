@@ -18,6 +18,7 @@ dependencyResolutionManagement {
 rootProject.name = "device-app-integrity"
 
 // --- SDK ---------------------------------------------------------------
+include(":integrity-model")
 include(":integrity-core")
 include(":integrity-detector-root")
 include(":integrity-detector-hooking")
