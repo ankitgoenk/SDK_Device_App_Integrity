@@ -42,7 +42,6 @@
 | `integrity-detector-app` | android-library | `APP_*` signals: signature, dex/lib digests, classloader |
 | `integrity-detector-environment` | android-library | `ENV_*` signals: hostile packages, ADB, CA store, overlays, a11y |
 | `integrity-detector-emulator` | android-library | `EMU_*` and `VIRT_*` signals |
-| `integrity-attestation-play` | android-library | Play Integrity wrapper, verdict mapping |
 | `integrity-baseline-plugin` | gradle-plugin | Build-time baseline generation (dex/lib digests, signing pins, string obfuscation keys) |
 | `integrity-testing` | android-library (debug) | Fakes, fixtures, a `ScriptedDetector` for host-app testing |
 | `sample-app` | application | Live report UI, forced-signal playground |

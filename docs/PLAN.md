@@ -223,8 +223,10 @@ zygote).
   profile and legitimate multi-user do **not** trigger `VIRT_*`.
 
 ### Phase 7 — Attestation & server verification *(1.5 weeks)*
-- `integrity-attestation-play`: Play Integrity **Standard** requests on the hot path,
-  **Classic** for high-value actions; verdicts mapped into the signal model.
+- Play Integrity is requested **by the host app, not by this SDK**: the request is a
+  network round trip, and ADR-0006 keeps all networking with the app. The `ATT_*` signals
+  stay in the vocabulary as `SRV` — produced by the backend from the verified token, and
+  never by a detector here.
 - Report signing: HMAC/ECDSA over the canonicalised report + server nonce, key material
   derived in native code; replay and clock-skew protection.
 - `sample-backend`: nonce issuance, token verification, decision endpoint, and a worked
@@ -332,7 +334,7 @@ verified on a real runtime, not merely built.
       a `SignalId` exists in code with no catalog entry)
 
 ### Phase 7–8
-- [ ] `integrity-attestation-play` behind an optional dependency
+- [ ] Backend verification of the Play Integrity token, mapped to `ATT_*` server-side
 - [ ] Canonical report serialisation (stable, versioned) + signing
 - [ ] Nonce protocol and replay window
 - [ ] `sample-backend` with verification and a decision matrix

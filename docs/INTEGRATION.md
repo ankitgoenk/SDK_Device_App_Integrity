@@ -14,9 +14,6 @@ dependencies {
     implementation("io.integrity.sdk:integrity-detector-app:<version>")
     implementation("io.integrity.sdk:integrity-detector-environment:<version>")
     implementation("io.integrity.sdk:integrity-detector-emulator:<version>")
-
-    // Optional attestation
-    implementation("io.integrity.sdk:integrity-attestation-play:<version>")
 }
 
 plugins {

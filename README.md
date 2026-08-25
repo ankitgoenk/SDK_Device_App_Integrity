@@ -106,7 +106,6 @@ you set `integrity.enableNative=true`.
 | `integrity-core` | Public API, data model, engine, scoring. No detectors |
 | `integrity-native` | C++ core: `/proc` scanning, code-integrity checks, string vault (phase 3) |
 | `integrity-detector-{root,hooking,app,environment,emulator}` | Signal families, one module each |
-| `integrity-attestation-play` | Play Integrity wrapper (phase 7) |
 | `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
 | `integrity-testing` | Fakes and fixtures for detector tests |
 | `sample-app` | Renders a live report |

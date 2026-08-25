@@ -282,8 +282,9 @@ from app open is not assignable. Compiler, not paragraph.
    and nothing will notice. **The implementation PR must bring `tsc --noEmit` into CI before
    this contract is described as verified** — the same lesson as the detekt configuration
    that reported zero findings while running a smaller ruleset than the one gating merges.
-5. **`integrity-attestation-play` is a stub.** §6 rests on it, so the security value of the
-   whole pipeline is currently unimplemented — worth stating before anyone plans around it.
+5. **Nothing implements attestation yet.** §6 rests on Play Integrity, the app now owns the
+   request, and no such call exists on either side. The security value of the pipeline is
+   therefore unimplemented today — worth stating plainly before anyone plans around it.
 
 ## What CI must enforce once this is built
 
@@ -345,17 +346,39 @@ the SDK's evidence has no attestation concept, no ATT_* verdict, and no awarenes
 token exists. The backend combines them and owns the scoring policy entirely, so that policy
 can change without touching the SDK's evidence model at all.
 
-**Consequence for `integrity-attestation-play`.** That module is currently an empty scaffold
-whose stated plan is to produce `ATT_*` detectors from Play Integrity requests on-device.
-Under this decision it should not do that: token acquisition belongs to the app. The module
-should either be removed or reduced to server-side documentation of how the token is
-verified. Flagged rather than changed here — it is a module deletion, and this is a design
-PR.
+**`integrity-attestation-play` is removed.** It was an empty scaffold whose stated plan was
+to produce `ATT_*` detectors from on-device Play Integrity requests, which this decision
+rules out. Nothing was kept, because nothing it could do is both useful and permitted: a
+thin wrapper around the token request is still SDK code originating network traffic, and the
+app can depend on `com.google.android.play:integrity` directly without our help.
 
-## Still open
+The `ATT_*` signal identifiers stay. The catalog already marks every one of them `SRV`, and
+`ATT_APP_NOT_RECOGNISED` sits in `DECISIVE_SIGNALS`, so they are shared vocabulary between
+this SDK and the backend rather than client detectors — the same scoring logic can run
+server-side where those signals actually exist. The module was the inconsistency; the
+vocabulary was always right.
 
-1. **Does the backend recompute scoring from signals, or consume `clientAdvisory`?**
-   Recomputing is the only version that survives a hostile client.
-2. **Nonce lifetime and issuance** — per session, per sensitive action, or per app open?
-   Item 2 above settles that a sensitive action needs its own; whether an ordinary-use
-   challenge is minted per session or per app open is still open.
+**And the SDK never verifies the token.** Verification is where the authoritative decision
+lives, so it belongs entirely to the backend. A client that graded Google's answer about
+itself would be exactly the circularity this architecture removes.
+
+## Resolved: scoring authority and nonce issuance
+
+**The backend recomputes the score from the signals.** `clientAdvisory` is diagnostics and
+telemetry — useful for spotting divergence between what the client concluded and what the
+server concludes, which is itself interesting — but a compromised client can put anything in
+those fields, so consuming them as a decision would make the whole pipeline decorative.
+
+**Ordinary-use challenges are issued per app session.** One challenge at initialisation, one
+evaluation, one decision valid for its window. Sensitive actions get their own challenge
+minted for the action, as above. That keeps the common path cheap and reserves the
+round trip for the operations that justify it.
+
+```
+app open  ──► challenge ──► evaluate ──► decision (≤ window)   once per session
+sensitive ──► challenge ──► evaluate ──► decision (this action) per action
+```
+
+All decisions in this ADR are now settled. Nothing further blocks implementation, which
+should begin with the CI gates in "What CI must enforce once this is built" rather than with
+the bridge.

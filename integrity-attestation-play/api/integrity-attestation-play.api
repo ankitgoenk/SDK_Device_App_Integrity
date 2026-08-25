@@ -1,5 +1,0 @@
-public final class io/integrity/attestation/play/PlayAttestation {
-	public static final field INSTANCE Lio/integrity/attestation/play/PlayAttestation;
-	public final fun all ()Ljava/util/List;
-}
-
