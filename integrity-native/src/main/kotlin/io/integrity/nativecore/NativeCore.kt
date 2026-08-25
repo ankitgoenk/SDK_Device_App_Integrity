@@ -29,21 +29,28 @@ internal object SystemLibraryLoader : NativeLibraryLoader {
 /** The JNI surface, behind an interface so the states above can be tested off-device. */
 internal interface NativeApi {
     fun selfCheck(expectedToken: String): Int
-    fun provokeFailure(): Int
+
+    /**
+     * Reads an address that is never mapped, returning the status it produced.
+     *
+     * Exercises the production read path rather than a test hook, and is how ADR-0005's
+     * /proc/self/mem assumption is confirmed on a real device.
+     */
+    fun probeUnmappedRead(): Int
 }
 
 internal object NativeBridge : NativeApi {
 
     override fun selfCheck(expectedToken: String): Int = nativeSelfCheck(expectedToken)
 
-    override fun provokeFailure(): Int = nativeProvokeFailure()
+    override fun probeUnmappedRead(): Int = nativeProbeUnmappedRead()
 
     // Registered dynamically in JNI_OnLoad, so the .so exports no Java_* symbol to grep
     // for. CI checks the released library for stray exports rather than trusting this
     // comment (ADR-0002).
     private external fun nativeSelfCheck(expected: String): Int
 
-    private external fun nativeProvokeFailure(): Int
+    private external fun nativeProbeUnmappedRead(): Int
 }
 
 /**
@@ -83,5 +90,10 @@ internal class NativeCore(
         // Mirrors integrity::SelfCheckStatus in selfcheck.h.
         const val STATUS_OK = 0
         const val STATUS_TOKEN_MISMATCH = 1
+
+        // Mirrors integrity::NativeStatus in status.h. Deliberately disjoint from the
+        // values above so a confusion between the two shows up as an obviously wrong
+        // number rather than a plausible one.
+        const val STATUS_UNAVAILABLE = 11
     }
 }

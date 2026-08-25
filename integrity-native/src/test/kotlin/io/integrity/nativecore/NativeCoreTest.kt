@@ -25,7 +25,7 @@ private class FakeApi(private val status: Int = NativeCore.STATUS_OK, private va
         return status
     }
 
-    override fun provokeFailure(): Int = NativeCore.STATUS_TOKEN_MISMATCH
+    override fun probeUnmappedRead(): Int = NativeCore.STATUS_UNAVAILABLE
 }
 
 private class FakeDetectionContext : DetectionContext {

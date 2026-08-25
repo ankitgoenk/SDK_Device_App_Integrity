@@ -262,9 +262,11 @@ jobs:
           g++ -std=c++17 -Wall -Wextra -Werror \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/selfcheck.cpp \
-            integrity-native/src/main/cpp/test/selfcheck_host_test.cpp \
-            -o /tmp/selfcheck_host_test
-          /tmp/selfcheck_host_test
+            integrity-native/src/main/cpp/maps.cpp \
+            integrity-native/src/main/cpp/safe_read.cpp \
+            integrity-native/src/main/cpp/test/native_host_test.cpp \
+            -o /tmp/native_host_test
+          /tmp/native_host_test
       - name: Type-check the JNI boundary against the host JDK headers
         run: |
           set -euo pipefail
@@ -272,6 +274,19 @@ jobs:
             -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/integrity.cpp
+
+      # ANDROID_STL=none provides no libc++ at all, so <cstddef> and friends do not exist
+      # — only the libc headers do. -nostdinc++ reproduces that in seconds here instead of
+      # two minutes into an NDK build. Added after exactly this slipped through: the host
+      # check used -fno-exceptions but still had libstdc++ headers on the include path.
+      - name: Reject C++ standard library headers in shipped sources
+        run: |
+          set -euo pipefail
+          for f in maps.cpp safe_read.cpp selfcheck.cpp; do
+            g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -nostdinc++ -fsyntax-only \
+              -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' "integrity-native/src/main/cpp/$f"
+            echo "$f builds without libc++"
+          done
 
   native-size-matrix:
     name: Native size trade (measurement)
