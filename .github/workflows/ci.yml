@@ -137,6 +137,16 @@ jobs:
           script: >-
             ./gradlew connectedDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
+
+      # connectedAndroidTest reports success when it runs zero tests, so this job used to
+      # pass while executing no root tests at all: the module's only instrumented test was
+      # CleanDeviceOnly and was filtered out above. Named expectations rather than
+      # inference, so deleting a module's last test fails here instead of going quiet.
+      - name: Prove the intended tests actually ran
+        run: >-
+          tools/check-instrumented-coverage.py
+          integrity-native integrity-detector-root sample-app
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -242,6 +252,12 @@ jobs:
           script: >-
             ./gradlew :integrity-detector-root:connectedDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
+
+      # An annotation filter that matched nothing would make this negative control pass
+      # without ever running on the clean image — the strongest possible "no root signals
+      # fired" result, and completely worthless.
+      - name: Prove the intended tests actually ran
+        run: tools/check-instrumented-coverage.py integrity-detector-root
 
       - uses: actions/upload-artifact@v4
         if: always()

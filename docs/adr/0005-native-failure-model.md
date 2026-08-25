@@ -85,6 +85,21 @@ same trap exists one layer up: `Confidence.INCONCLUSIVE` is the Kotlin spelling 
 safe-looking state, so this is a project-wide testing rule, written up in `CONTRIBUTING.md`
 under "Testing around the 'couldn't verify' state".
 
+**Where the widths are actually exercised.** Building an ABI is not executing it, and the
+matrix should be read as it is rather than rounded up:
+
+| | Arithmetic + `pread` behaviour | Real Android runtime |
+|---|---|---|
+| 64-bit | host suite | `x86_64` emulator |
+| 32-bit | host suite, `-m32` | **not yet executed** |
+
+`armeabi-v7a` compiles in CI and ships in the AAR, but no job runs the library inside a
+32-bit Android process. Closing that needs an `x86`, API ≤ 30 emulator lane — the last
+system images that are 32-bit. Until then, any claim about 32-bit device behaviour rests on
+host coverage plus the ABI building, and should be stated that way. This is a known gap, not
+a resolved one; it does not block phase 3b detectors, provided none of them claims on-device
+32-bit validation it does not have.
+
 **4. No dynamic allocation.** Fixed buffers, streamed reads with a hard cap. `STL=none`
 removes libc++'s `operator new` anyway, and an allocator in a security library is one more
 failure mode and one more thing to audit.
