@@ -80,7 +80,10 @@ correct answer for an unmapped one. Every absolute assertion in the suite stays 
 half the address space quietly stops being readable. Faults that *collapse two states into
 the safe-looking one* cannot be caught by asserting a status; they need a relative property.
 Here: if a low address can be read, a high one must be readable too. Where a check like that
-can go vacuous — no address in the run crossing the boundary — assert that it did not.
+can go vacuous — no address in the run crossing the boundary — assert that it did not. The
+same trap exists one layer up: `Confidence.INCONCLUSIVE` is the Kotlin spelling of the same
+safe-looking state, so this is a project-wide testing rule, written up in `CONTRIBUTING.md`
+under "Testing around the 'couldn't verify' state".
 
 **4. No dynamic allocation.** Fixed buffers, streamed reads with a hard cap. `STL=none`
 removes libc++'s `operator new` anyway, and an allocator in a security library is one more
