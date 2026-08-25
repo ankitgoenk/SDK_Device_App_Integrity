@@ -103,7 +103,8 @@ you set `integrity.enableNative=true`.
 
 | Module | Purpose |
 | --- | --- |
-| `integrity-core` | Public API, data model, engine, scoring. No detectors |
+| `integrity-model` | Pure-JVM evidence and scoring model, shared verbatim with the backend. No Android |
+| `integrity-core` | Public API, engine, cache, `Detector`/`ReportSink` SPI. No detectors |
 | `integrity-native` | C++ core: `/proc` scanning, code-integrity checks, string vault (phase 3) |
 | `integrity-detector-{root,hooking,app,environment,emulator}` | Signal families, one module each |
 | `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
