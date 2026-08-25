@@ -176,6 +176,10 @@ void safeReadTests() {
     if (integrity::readSelfMemory(lower, buffer, sizeof(buffer)) == integrity::kStatusOk) {
         expect(integrity::readSelfMemory(higher, buffer, sizeof(buffer)) == integrity::kStatusOk,
                "a high address reads as well as a low one (off_t must not truncate)");
+    } else {
+        // Skipping is legitimate, staying quiet about it is not: a green log would otherwise
+        // be indistinguishable from one where this property was actually exercised.
+        std::printf("SKIPPED: /proc/self/mem unreadable here, off_t property not exercised\n");
     }
 
 #if UINTPTR_MAX <= 0xffffffffu
