@@ -11,7 +11,10 @@ Usage: TEST_CMD='./gradlew :sample-backend:test' tools/mutate-backend.py
 import pathlib, shutil, subprocess, sys, tempfile, os
 
 SP = pathlib.Path(__file__).parent
-REPO = pathlib.Path("/home/user/SDK_Device_App_Integrity")
+# Derived, never hardcoded. The first version of this line carried the absolute path of the
+# machine it was written on, so the CI job died with a FileNotFoundError before running a
+# single mutant — the same failure tools/check-signal-catalog.py had, for the same reason.
+REPO = pathlib.Path(__file__).resolve().parent.parent
 BACKEND = "sample-backend/src/main/kotlin/io/integrity/sample/backend"
 STORE = f"{BACKEND}/InMemoryChallengeStore.kt"
 SERVICE = f"{BACKEND}/VerificationService.kt"
@@ -95,6 +98,20 @@ MUTANTS = [
      "DeviceState.UNAVAILABLE to Action.DENY,",
      "DeviceState.UNAVAILABLE to Action.ALLOW,"),
 ]
+
+# Baseline first, on unmutated source. Without this the gate is satisfiable by a broken test
+# command: if TEST_CMD fails for any reason — a compile error, a missing SDK, a typo in the
+# command itself — then every mutant "dies" and the run reports a perfect score having
+# verified nothing. That happened on the first attempt at this file, so it is checked rather
+# than assumed.
+print("baseline: running the suite on unmutated source")
+baseline = subprocess.run(TEST_CMD, shell=True, cwd=REPO, capture_output=True, text=True)
+if baseline.returncode != 0:
+    print("FAIL: the suite does not pass before any mutation, so 'every mutant killed' would "
+          "mean nothing. Fix the build or TEST_CMD first.", file=sys.stderr)
+    print((baseline.stdout + baseline.stderr)[-2000:], file=sys.stderr)
+    sys.exit(2)
+print("baseline: green\n")
 
 killed, survived = 0, []
 for path, name, old, new in MUTANTS:
