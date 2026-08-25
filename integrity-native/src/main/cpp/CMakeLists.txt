@@ -11,6 +11,8 @@ endif()
 
 add_library(integrity SHARED
         integrity.cpp
+        maps.cpp
+        safe_read.cpp
         selfcheck.cpp)
 
 target_compile_definitions(integrity PRIVATE

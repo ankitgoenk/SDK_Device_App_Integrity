@@ -27,7 +27,7 @@ fi
 
 prepare() {
   rm -rf "$WORK/$1" && mkdir -p "$WORK/$1"
-  cp "$SRC/CMakeLists.txt" "$SRC/integrity.cpp" "$SRC/selfcheck.cpp" "$SRC/selfcheck.h" "$WORK/$1/"
+  cp "$SRC"/CMakeLists.txt "$SRC"/*.cpp "$SRC"/*.h "$WORK/$1/"
 }
 
 measure() {

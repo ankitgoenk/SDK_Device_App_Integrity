@@ -51,20 +51,18 @@ class NativeCoreInstrumentedTest {
     }
 
     /**
-     * A C++ exception thrown inside the boundary must be contained and turned into a
-     * status code. If this test crashes the process instead of failing, the containment
-     * is broken — which for an SDK inside someone else's app is the worst outcome there
-     * is, worse than any missed detection.
+     * The property that matters on a real device: an address that is never mapped produces
+     * a status code, not a signal.
+     *
+     * This also confirms ADR-0005's flagged assumption — that reading through
+     * /proc/self/mem turns a bad address into an errno on Android, not just on a desktop
+     * kernel. SELinux policy, kernel version and OEM changes all get a say, so it is
+     * asserted here rather than believed.
      */
     @Test
-    fun aNativeFailureIsContainedAtTheBoundary() {
+    fun anUnmappedAddressProducesAStatusRatherThanASignal() {
         SystemLibraryLoader.load(NativeCore.LIBRARY_NAME)
 
-        assertEquals(EXPECTED_PROVOKED_FAILURE, NativeBridge.provokeFailure())
-    }
-
-    private companion object {
-        /** integrity::kProvokedFailure in selfcheck.h. */
-        const val EXPECTED_PROVOKED_FAILURE = 3
+        assertEquals(NativeCore.STATUS_UNAVAILABLE, NativeBridge.probeUnmappedRead())
     }
 }

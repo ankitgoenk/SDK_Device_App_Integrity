@@ -13,9 +13,9 @@
 
 #include <jni.h>
 
-#include <stdexcept>
-
+#include "safe_read.h"
 #include "selfcheck.h"
+#include "status.h"
 
 namespace {
 
@@ -39,22 +39,28 @@ jint selfCheck(JNIEnv* env, jobject /* thiz */, jstring expected) {
     }
 }
 
-/** Exists so CI can prove a native failure is contained rather than propagated. */
-jint provokeFailure(JNIEnv* /* env */, jobject /* thiz */) {
-    try {
-        throw std::runtime_error("deliberate failure for the containment test");
-    } catch (...) {
-        return integrity::kProvokedFailure;
-    }
+/**
+ * Attempts a read of an address that is never mapped, and reports what happened.
+ *
+ * Replaces a hook that threw an exception purely so a test could watch it be caught, which
+ * proved a property of the test hook. This exercises the real production read path and
+ * proves the property that matters: a bad address becomes a status code rather than a
+ * signal. It is also how ADR-0005's flagged assumption about /proc/self/mem gets confirmed
+ * on real devices rather than assumed.
+ */
+jint probeUnmappedRead(JNIEnv* /* env */, jobject /* thiz */) {
+    unsigned char scratch[16];
+    constexpr uintptr_t kNeverMapped = 0xdead0000u;
+    return integrity::readSelfMemory(kNeverMapped, scratch, sizeof(scratch));
 }
 
 JNINativeMethod methodTable[2] = {
     {const_cast<char*>("nativeSelfCheck"),
      const_cast<char*>("(Ljava/lang/String;)I"),
      reinterpret_cast<void*>(selfCheck)},
-    {const_cast<char*>("nativeProvokeFailure"),
+    {const_cast<char*>("nativeProbeUnmappedRead"),
      const_cast<char*>("()I"),
-     reinterpret_cast<void*>(provokeFailure)},
+     reinterpret_cast<void*>(probeUnmappedRead)},
 };
 
 }  // namespace
