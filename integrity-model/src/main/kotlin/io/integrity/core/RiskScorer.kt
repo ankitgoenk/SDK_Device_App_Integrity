@@ -4,7 +4,18 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** The scored view of one evaluation, before it is wrapped in an [IntegrityReport]. */
-internal class ScoringResult(val verdict: Verdict, val riskScore: Int, val categoryScores: Map<Category, Int>)
+/**
+ * The outcome of scoring a set of signals under a policy.
+ *
+ * Public because the backend re-scores with this same class rather than trusting the
+ * client's numbers (ADR-0006). It was `internal` while the only caller lived in the same
+ * module; the extraction is what made a second, drifting implementation the alternative.
+ */
+public class ScoringResult(
+    public val verdict: Verdict,
+    public val riskScore: Int,
+    public val categoryScores: Map<Category, Int>
+)
 
 /**
  * Signals -> category subscores -> one risk score -> a verdict.
@@ -18,9 +29,9 @@ internal class ScoringResult(val verdict: Verdict, val riskScore: Int, val categ
  * Escalation rules then apply floors, because some observations are decisive regardless of
  * the arithmetic. See docs/RISK_SCORING.md.
  */
-internal class RiskScorer(private val policy: Policy) {
+public class RiskScorer(private val policy: Policy) {
 
-    fun score(signals: List<Signal>, coverage: Float): ScoringResult {
+    public fun score(signals: List<Signal>, coverage: Float): ScoringResult {
         val active = signals.filterNot { policy.isDisabled(it.id) }
         val categoryScores = categoryScores(active)
         val combined = combine(categoryScores)

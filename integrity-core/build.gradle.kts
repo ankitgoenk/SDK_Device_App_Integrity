@@ -7,6 +7,9 @@ android {
 }
 
 dependencies {
+    // api, not implementation: consumers import Signal, SignalId and the rest from here
+    // and must keep seeing them. Same package, so nothing downstream changes.
+    api(project(":integrity-model"))
     api(libs.androidx.annotation)
     api(libs.kotlinx.coroutines.core)
 

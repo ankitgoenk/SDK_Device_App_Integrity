@@ -72,7 +72,24 @@ def catalog_rows() -> dict[str, list[str]]:
     return rows
 
 
-POLICY = ROOT / "integrity-core" / "src" / "main" / "kotlin" / "io" / "integrity" / "core" / "Policy.kt"
+def _locate(filename: str) -> pathlib.Path:
+    """Finds a source file by name, so moving it between modules is not a silent break.
+
+    This was a hardcoded module path until Policy.kt moved to integrity-model, at which
+    point the checker died with a FileNotFoundError traceback rather than saying what it
+    could not find. A gate whose failure mode is a stack trace teaches the next person
+    nothing.
+    """
+    matches = [p for p in ROOT.rglob(filename) if "/build/" not in str(p) and "/src/test/" not in str(p)]
+    if len(matches) != 1:
+        raise SystemExit(
+            f"expected exactly one {filename} outside build and test directories, found "
+            f"{len(matches)}: {[str(m.relative_to(ROOT)) for m in matches]}"
+        )
+    return matches[0]
+
+
+POLICY = _locate("Policy.kt")
 
 # Files that mention a SignalId to weight or score it, rather than to emit it.
 NON_PRODUCERS = {"SignalId.kt", "Policy.kt", "RiskScorer.kt"}
