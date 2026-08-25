@@ -110,15 +110,48 @@ export interface IntegrityDecision {
   readonly actions?: readonly string[];
 }
 
-/**
- * Whether a decision may be acted on, given what is being attempted.
- *
- * Deliberately a function of both the decision and the action: ordinary use accepts any
- * unexpired decision, a sensitive action requires one bound to a challenge issued for it.
- * Written here so the distinction is reachable from the type system rather than living in
- * a document nobody opens twice.
- */
 export type ActionSensitivity = 'ORDINARY' | 'SENSITIVE';
+
+/**
+ * A decision that answers a challenge minted for a specific action.
+ *
+ * `challenge` is narrowed from `string | null`, so a decision from app open — which has no
+ * action-specific challenge — is not assignable here. That is the point: the distinction
+ * between "valid" and "fresh for this operation" is enforced by the compiler rather than
+ * by a paragraph.
+ */
+export interface ActionBoundDecision extends IntegrityDecision {
+  readonly challenge: string;
+}
+
+/**
+ * Ordinary use: an unexpired decision is enough.
+ *
+ * `null` is a legitimate input and returns false — no decision is not a trusted decision
+ * (hard rule 8).
+ */
+export function mayProceed(
+  decision: IntegrityDecision | null,
+  nowMillis: number,
+): boolean;
+
+/**
+ * A sensitive action: the decision must answer the challenge minted for *this* operation,
+ * and be unexpired, and be TRUSTED.
+ *
+ * The signature is the guard rail. Without it the natural thing to write is
+ *
+ *     if (decision.expiresAtMillis > Date.now()) allowTransaction();
+ *
+ * which turns the replay protection into a timestamp check and reintroduces exactly the
+ * decision-replay this contract exists to close. Requiring the issued challenge as an
+ * argument means the caller cannot express the sensitive case without having minted one.
+ */
+export function mayProceedWithSensitiveAction(
+  decision: IntegrityDecision | null,
+  issuedChallenge: string,
+  nowMillis: number,
+): decision is ActionBoundDecision;
 
 export interface IntegrityModule {
   /** Registers detectors and returns. Starts no work and blocks nothing. */

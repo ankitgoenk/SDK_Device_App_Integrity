@@ -18,6 +18,28 @@ ADR-0003 already forbids network IO in the SDK, and this ADR is the reason that 
 rather than a preference: the app owns transport, so there is exactly one networking stack,
 one place authentication lives, and one place to reason about retries.
 
+## Four concepts that must not merge
+
+Most of the failure modes below are one of these being mistaken for another.
+
+| Concept | Meaning | Produced by |
+|---|---|---|
+| **Evidence** | what the SDK observed | the device, possibly hostile |
+| **Challenge** | which evaluation the evidence belongs to | the backend |
+| **Decision** | what the backend concluded | the backend |
+| **Freshness** | whether that decision is recent enough *for this operation* | the backend, per action |
+
+And the invariants they exist to protect. Every one of these was learned the expensive way
+somewhere between PR #6a and here:
+
+```
+INCONCLUSIVE    ≠  TRUSTED
+UNAVAILABLE     ≠  TRUSTED
+NOT_EVALUATED   ≠  TRUSTED
+UNEXPIRED       ≠  FRESH
+CLIENT_VERDICT  ≠  SERVER_DECISION
+```
+
 ## Decision
 
 ### 1. Native SDK API
@@ -223,6 +245,20 @@ asked globally. Split by action sensitivity and both hold:
 Which operations count as sensitive is a product decision and belongs in a table the product
 owns — money movement, credential change and payee addition are the obvious candidates.
 
+**But sensitivity is a protocol concept, not a product footnote.** The contract carries
+`ActionSensitivity` and the two-tier decision rule whether or not the list is agreed,
+because the alternative is that someone writes
+
+```ts
+if (decision.expiresAtMillis > Date.now()) allowTransaction();
+```
+
+and the replay protection becomes a timestamp comparison. The bridge therefore exposes
+`mayProceedWithSensitiveAction(decision, issuedChallenge, now)` rather than leaving callers
+to inspect the fields: the signature cannot be satisfied without having minted a challenge
+for the operation, and `ActionBoundDecision` narrows `challenge` to non-null so a decision
+from app open is not assignable. Compiler, not paragraph.
+
 | Case | Behaviour |
 |---|---|
 | SDK evaluation fails | report with `INCONCLUSIVE` signals and reduced coverage; never a clean report |
@@ -248,6 +284,23 @@ owns — money movement, credential change and payee addition are the obvious ca
    that reported zero findings while running a smaller ruleset than the one gating merges.
 5. **`integrity-attestation-play` is a stub.** §6 rests on it, so the security value of the
    whole pipeline is currently unimplemented — worth stating before anyone plans around it.
+
+## What CI must enforce once this is built
+
+Design documents are not load-bearing; this project has spent a dozen PRs establishing that.
+The implementation is not done until CI rejects each of these:
+
+1. No client-generated trusted verdict reaching a decision path.
+2. No treatment of missing evidence as trusted.
+3. Challenge bound into the report.
+4. Decision bound to the challenge it answers.
+5. Sensitive actions requiring an action-bound decision, not merely an unexpired one.
+6. A client cannot extend backend freshness — only shorten it.
+7. `tsc --noEmit` over the TypeScript contract, before it is described as verified.
+
+Items 1, 2 and 5 are behavioural and want tests that fail when the property is broken —
+the mutation gate in `tools/mutate-native.py` is the model: assert that broken code fails,
+not merely that correct code passes.
 
 ## Unresolved — these need answers before implementation
 
