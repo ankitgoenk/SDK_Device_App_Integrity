@@ -17,6 +17,11 @@ object IntegrityBuild {
     /** Keep in step with IntegrityReport.SDK_VERSION. */
     const val VERSION = "0.1.0-alpha01"
 
+    /** Pinned so every machine and CI runner builds the .so with the same toolchain. */
+    const val NDK_VERSION = "27.0.12077973"
+
+    const val CMAKE_VERSION = "3.22.1"
+
     const val NAMESPACE_PREFIX = "io.integrity"
     const val TEST_RUNNER = "androidx.test.runner.AndroidJUnitRunner"
 

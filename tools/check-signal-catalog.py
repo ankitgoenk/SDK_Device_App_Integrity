@@ -72,6 +72,55 @@ def catalog_rows() -> dict[str, list[str]]:
     return rows
 
 
+POLICY = ROOT / "integrity-core" / "src" / "main" / "kotlin" / "io" / "integrity" / "core" / "Policy.kt"
+
+# Files that mention a SignalId to weight or score it, rather than to emit it.
+NON_PRODUCERS = {"SignalId.kt", "Policy.kt", "RiskScorer.kt"}
+
+
+BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+LINE_COMMENT = re.compile(r"//[^\n]*")
+
+
+def strip_comments(source: str) -> str:
+    """A signal named in a KDoc is documented, not emitted."""
+    return LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", source))
+
+
+def excluded_modules() -> set[str]:
+    """Modules settings.gradle.kts leaves out of the build cannot emit anything."""
+    excluded: set[str] = set()
+    properties = (ROOT / "gradle.properties").read_text(encoding="utf-8")
+    if "integrity.enableNative=true" not in properties:
+        excluded.add("integrity-native")
+    return excluded
+
+
+def producers() -> set[str]:
+    """Signals some production file actually emits, in a module that is built."""
+    skip = excluded_modules()
+    found: set[str] = set()
+    for path in ROOT.rglob("*.kt"):
+        parts = path.parts
+        text = str(path)
+        if "/build/" in text or "/src/main/" not in text or path.name in NON_PRODUCERS:
+            continue
+        if any(module in parts for module in skip):
+            continue
+        source = strip_comments(path.read_text(encoding="utf-8"))
+        found |= set(re.findall(r"SignalId\.([A-Z][A-Z0-9_]+)", source))
+    return found
+
+
+def default_weights() -> dict[str, str]:
+    """Weights the default policy applies out of the box."""
+    text = POLICY.read_text(encoding="utf-8")
+    block = re.search(r"BASE_WEIGHTS[^=]*=\s*(emptyMap\(\)|mapOf\((.*?)\n        \))", text, re.S)
+    if block is None or block.group(1).startswith("emptyMap"):
+        return {}
+    return dict(re.findall(r"SignalId\.([A-Z][A-Z0-9_]+)\s+to\s+Weight\.([A-Z]+)", block.group(2)))
+
+
 def main() -> int:
     in_code = code_ids()
     rows = catalog_rows()
@@ -102,6 +151,16 @@ def main() -> int:
 
         if name not in tested:
             problems.append(f"{name}: no unit test references it by name.")
+
+    # A weight configured before its producer exists is inert until the detector ships,
+    # then activates silently. It has bitten this project twice; make it a build failure.
+    emitted = producers()
+    for name, weight in sorted(default_weights().items()):
+        if weight != "INFORMATIONAL" and name not in emitted:
+            problems.append(
+                f"{name}: default policy weights it {weight} but nothing emits it. "
+                f"Ship the weight with its detector, not before."
+            )
 
     if problems:
         print("FAIL: the detection evidence chain is incomplete.\n")

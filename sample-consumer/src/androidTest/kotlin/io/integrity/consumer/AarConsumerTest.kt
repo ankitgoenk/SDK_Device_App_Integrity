@@ -3,6 +3,7 @@ package io.integrity.consumer
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.Depth
 import io.integrity.core.IntegrityGuard
+import io.integrity.core.SignalId
 import io.integrity.core.Verdict
 import io.integrity.detector.environment.EnvironmentDetectors
 import io.integrity.detector.root.RootDetectors
@@ -29,6 +30,27 @@ class AarConsumerTest {
     @Test
     fun applicationInitialisedTheSdk() {
         assertTrue(IntegrityGuard.isInitialized())
+    }
+
+    /**
+     * The native library has to arrive inside a published AAR and load in an unrelated
+     * application. If it did not, this reports META_NATIVE_UNAVAILABLE instead of nothing.
+     */
+    @Test
+    fun theNativeLibraryLoadsFromThePublishedAar() = runBlocking {
+        val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
+
+        val nativeProblems = report.signals.filter {
+            it.id == SignalId.META_NATIVE_UNAVAILABLE ||
+                it.id == SignalId.META_NATIVE_FAILED ||
+                it.id == SignalId.APP_NATIVE_LIB_MISMATCH
+        }
+
+        assertTrue(
+            "native core did not load cleanly from the AAR: " +
+                nativeProblems.joinToString { "${it.id}${it.evidence}" },
+            nativeProblems.isEmpty()
+        )
     }
 
     @Test

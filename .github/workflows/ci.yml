@@ -49,6 +49,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
       # Fails when the committed api/*.api dumps no longer match the source.
       # Regenerate deliberately with ./gradlew apiDump and review the diff.
@@ -64,15 +69,41 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew assemble testDebugUnitTest test lint
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-and-lint-reports
-          path: |
-            **/build/reports/
-            **/build/test-results/
+
+      - name: Assert the shipped .so is stripped, unexported and within budget
+        run: |
+          set -euo pipefail
+          # Assert on the AAR, not on build intermediates. Globbing intermediates picks up
+          # pre-strip stages that were never going to ship, which is a property of the
+          # build directory rather than of the artifact.
+          aar=$(find integrity-native/build/outputs/aar -name '*-release.aar' | head -1)
+          test -n "$aar"
+          echo "inspecting $aar"
+          rm -rf /tmp/aar && mkdir -p /tmp/aar
+          unzip -q -o "$aar" -d /tmp/aar
+          mapfile -t libs < <(find /tmp/aar/jni -name 'libintegrity.so' | sort)
+          echo "shipped ABIs: ${#libs[@]}"
+          test "${#libs[@]}" -eq 3
+          for so in "${libs[@]}"; do
+            size=$(stat -c%s "$so")
+            echo "--- $so ($size bytes)"
+            # ADR-0002: dynamic registration, so no greppable Java_* entry points.
+            if nm -D --defined-only "$so" 2>/dev/null | grep -q 'Java_io_integrity'; then
+              echo "FAIL: $so exports a Java_io_integrity_* symbol"; exit 1
+            fi
+            if readelf -S "$so" | grep -q '\.debug_info'; then
+              echo "FAIL: $so is not stripped"; exit 1
+            fi
+            if [ "$size" -gt 262144 ]; then
+              echo "FAIL: $so exceeds the 256 KB per-ABI budget"; exit 1
+            fi
+          done
 
   instrumented:
     name: Instrumented smoke test
@@ -84,6 +115,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
       - name: Enable KVM for the emulator
         run: |
@@ -118,6 +153,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Publish the SDK to a local Maven repository
@@ -180,6 +219,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
       - uses: gradle/actions/setup-gradle@v4
       - name: Enable KVM for the emulator
         run: |
@@ -205,3 +248,27 @@ jobs:
         with:
           name: clean-baseline-reports
           path: 'integrity-detector-root/build/reports/androidTests/'
+
+  native-host:
+    name: Native logic (host toolchain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The pure half of the native core carries no Android headers precisely so it can be
+      # tested here. Logic that can only run on a device is logic that rarely gets run.
+      - name: Build and run the native host tests
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -Wall -Wextra -Werror \
+            -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+            integrity-native/src/main/cpp/selfcheck.cpp \
+            integrity-native/src/main/cpp/test/selfcheck_host_test.cpp \
+            -o /tmp/selfcheck_host_test
+          /tmp/selfcheck_host_test
+      - name: Type-check the JNI boundary against the host JDK headers
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+            integrity-native/src/main/cpp/integrity.cpp

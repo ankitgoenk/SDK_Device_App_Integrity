@@ -28,6 +28,21 @@ public value class SignalId(public val value: String) {
         /** Host misconfiguration, e.g. no signing pin supplied. */
         public val META_CONFIG_INVALID: SignalId = SignalId("META_CONFIG_INVALID")
 
+        // --- NATIVE CORE (phase 3a) --------------------------------------------------
+        // Three of these describe the SDK's own state, not the device's. Only a
+        // self-check mismatch is positive evidence about the artifact: a library that
+        // fails to load is indistinguishable from a missing ABI, and an attacker who
+        // deletes the .so is counting on exactly that ambiguity.
+
+        /** The host did not ask for the native core; its absence is expected. */
+        public val META_NATIVE_NOT_CONFIGURED: SignalId = SignalId("META_NATIVE_NOT_CONFIGURED")
+
+        /** The native core loaded but a call into it failed. */
+        public val META_NATIVE_FAILED: SignalId = SignalId("META_NATIVE_FAILED")
+
+        /** The loaded native library is not the one this build of the SDK ships. */
+        public val APP_NATIVE_LIB_MISMATCH: SignalId = SignalId("APP_NATIVE_LIB_MISMATCH")
+
         // --- ROOT (phase 2) ---------------------------------------------------------
 
         /** A `su` or related binary exists in a world-readable system location. */

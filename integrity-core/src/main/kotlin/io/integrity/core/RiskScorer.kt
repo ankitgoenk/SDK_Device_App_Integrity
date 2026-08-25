@@ -35,8 +35,13 @@ internal class RiskScorer(private val policy: Policy) {
             return ScoringResult(base, combined, categoryScores)
         }
 
-        val escalated = escalate(base, active, categoryScores)
-        val floor = scoreFloor(active)
+        // One choke point rather than a check inside each rule. Gating rule-by-rule was
+        // tried and forgotten three times — for the decisive signals, then the score
+        // floor, then the native-unavailable escalation. Filtering once means a rule
+        // added later cannot reintroduce the bypass by omission.
+        val actionable = active.filter { policy.weightOf(it.id) != Weight.INFORMATIONAL }
+        val escalated = escalate(base, actionable, categoryScores)
+        val floor = scoreFloor(actionable)
         return ScoringResult(escalated, maxOf(combined, floor), categoryScores)
     }
 
@@ -68,21 +73,15 @@ internal class RiskScorer(private val policy: Policy) {
     private fun escalate(base: Verdict, signals: List<Signal>, categoryScores: Map<Category, Int>): Verdict {
         var verdict = base
 
-        // An escalation rule may never outrank the weight. A signal still shipping at
-        // INFORMATIONAL has not been validated against real-world data, so it must not be
-        // able to force a verdict through a side door — otherwise hard rule 6 would be a
-        // fiction for every signal an escalation rule happens to name. Promoting the
-        // weight (e.g. AppDetectors.proposedWeights) is what arms the escalation.
-        val promoted = { signal: Signal -> policy.weightOf(signal.id) != Weight.INFORMATIONAL }
-
+        // Callers pass only promoted signals; see the filter in score().
         // Anything confirmed in the hooking family means the process is already owned.
         val confirmedHooking = signals.any {
-            it.category == Category.HOOKING && it.confidence == Confidence.CONFIRMED && promoted(it)
+            it.category == Category.HOOKING && it.confidence == Confidence.CONFIRMED
         }
         if (confirmedHooking) verdict = verdict.atLeast(Verdict.COMPROMISED)
 
         val decisive = signals.any {
-            it.confidence == Confidence.CONFIRMED && it.id in DECISIVE_SIGNALS && promoted(it)
+            it.confidence == Confidence.CONFIRMED && it.id in DECISIVE_SIGNALS
         }
         if (decisive) verdict = verdict.atLeast(Verdict.COMPROMISED)
 
@@ -97,6 +96,9 @@ internal class RiskScorer(private val policy: Policy) {
         return verdict
     }
 
+    // Gated on promotion for the same reason escalations are: a floor is just an
+    // escalation wearing a number, and an unpromoted signal must not be able to move the
+    // score by any route. The previous fix covered escalate() and missed this one.
     private fun scoreFloor(signals: List<Signal>): Int =
         if (signals.any { it.id == SignalId.META_NATIVE_UNAVAILABLE }) NATIVE_MISSING_FLOOR else 0
 
