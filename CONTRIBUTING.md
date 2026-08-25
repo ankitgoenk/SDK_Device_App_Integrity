@@ -29,6 +29,12 @@ Known bypass      how you would defeat it. "I couldn't" is not an answer; say wh
 FP analysis       a legitimate configuration that could trigger it, and why the weight is safe
 ```
 
+A detector whose positive fixture cannot be produced honestly is not ready to be written.
+Design it first, in `docs/detectors/<SIGNAL_ID>.md`, and get the known bypass and the
+positive fixture reviewed before any implementation exists — both are far easier to argue
+away once there is code to defend. `docs/detectors/HOOK_SELF_TEXT_MISMATCH.md` is the
+worked example.
+
 Four of these are enforced by `tools/check-signal-catalog.py` in CI: a `SignalId` in
 production code must have a catalog row, that row must state a technique, a false-positive
 risk and a known bypass, and at least one unit test must reference the signal by name.
