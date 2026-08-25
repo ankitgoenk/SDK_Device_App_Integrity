@@ -103,27 +103,56 @@ jint probeMappedRead(JNIEnv* /* env */, jobject /* thiz */) {
  * Returns null only if the VM cannot allocate the array, which the Kotlin side treats as a
  * failed call rather than a clean result.
  */
-jlongArray measureSelfText(JNIEnv* env, jobject /* thiz */) {
-    integrity::SelfTextMeasurement measurement{};
-    const integrity::NativeStatus status = integrity::measureSelfText(&measurement);
-
-    const jlong values[5] = {
+jlongArray toResult(JNIEnv* env, integrity::NativeStatus status,
+                    const integrity::SelfTextMeasurement& measurement) {
+    const jlong values[6] = {
         static_cast<jlong>(status),
         static_cast<jlong>(measurement.mappingsFound),
         static_cast<jlong>(measurement.bytesCompared),
         static_cast<jlong>(measurement.bytesDiffering),
         static_cast<jlong>(measurement.firstDifferenceAt),
+        static_cast<jlong>(measurement.reason),
     };
 
-    jlongArray out = env->NewLongArray(5);
+    jlongArray out = env->NewLongArray(6);
     if (out == nullptr) {
         return nullptr;
     }
-    env->SetLongArrayRegion(out, 0, 5, values);
+    env->SetLongArrayRegion(out, 0, 6, values);
     return out;
 }
 
-JNINativeMethod methodTable[4] = {
+jlongArray measureSelfText(JNIEnv* env, jobject /* thiz */) {
+    integrity::SelfTextMeasurement measurement{};
+    const integrity::NativeStatus status = integrity::measureSelfText(&measurement);
+    return toResult(env, status, measurement);
+}
+
+/**
+ * Measures against a caller-supplied mapping table.
+ *
+ * Read-only, and it exists so the instrumented suite can build a positive fixture without
+ * this library shipping a way to make its own code writable. Weigh those two: an SDK whose
+ * job is integrity should not carry an mprotect-your-own-text primitive into every host
+ * app, even behind a debug flag. This reads; it never writes, and it returns counts rather
+ * than content.
+ */
+jlongArray measureSelfTextFrom(JNIEnv* env, jobject /* thiz */, jstring mapsPath) {
+    if (mapsPath == nullptr) {
+        return nullptr;
+    }
+    const char* chars = env->GetStringUTFChars(mapsPath, nullptr);
+    if (chars == nullptr) {
+        return nullptr;
+    }
+    integrity::SelfTextMeasurement measurement{};
+    const integrity::NativeStatus status =
+        integrity::measureSelfTextFrom(chars, &measurement);
+    env->ReleaseStringUTFChars(mapsPath, chars);
+    return toResult(env, status, measurement);
+}
+
+JNINativeMethod methodTable[5] = {
     {const_cast<char*>("nativeSelfCheck"),
      const_cast<char*>("(Ljava/lang/String;)I"),
      reinterpret_cast<void*>(selfCheck)},
@@ -136,6 +165,9 @@ JNINativeMethod methodTable[4] = {
     {const_cast<char*>("nativeMeasureSelfText"),
      const_cast<char*>("()[J"),
      reinterpret_cast<void*>(measureSelfText)},
+    {const_cast<char*>("nativeMeasureSelfTextFrom"),
+     const_cast<char*>("(Ljava/lang/String;)[J"),
+     reinterpret_cast<void*>(measureSelfTextFrom)},
 };
 
 }  // namespace

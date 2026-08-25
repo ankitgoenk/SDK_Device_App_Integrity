@@ -191,6 +191,7 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getAPP_NATIVE_LIB_MISMATCH-isIsmlw ()Ljava/lang/String;
 	public final fun getAPP_SIGNATURE_MISMATCH-isIsmlw ()Ljava/lang/String;
 	public final fun getATT_APP_NOT_RECOGNISED-isIsmlw ()Ljava/lang/String;
+	public final fun getHOOK_SELF_TEXT_MISMATCH-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_CONFIG_INVALID-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_ERROR-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_DETECTOR_TIMEOUT-isIsmlw ()Ljava/lang/String;

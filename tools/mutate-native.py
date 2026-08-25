@@ -131,6 +131,15 @@ MUTATIONS = (
              "return kStatusOk;\n    }\n\n    rewind(maps);",
              "failing to identify our own module reported as success"),
 
+    # --- selftext.cpp: the reasons must stay distinguishable ----------------------------
+    Mutation("selftext.cpp", "out->reason = kReasonSelfMappingNotFound;",
+             "out->reason = kReasonMapsUnreadable;",
+             "two different failures reported as the same reason"),
+    Mutation("selftext.cpp", "out->reason = kReasonNothingCompared;", "out->reason = kReasonNone;",
+             "having compared nothing reported with no reason at all"),
+    Mutation("selftext.cpp", "out->reason = kReasonMapsUnreadable;", "out->reason = kReasonNone;",
+             "an unreadable mapping table reported with no reason"),
+
     # --- selfcheck.cpp ------------------------------------------------------------------
     Mutation("selfcheck.cpp", "return difference == 0;", "return true;",
              "token comparison always succeeds"),

@@ -417,6 +417,7 @@ void selfTextMeasurementTests() {
                "every executable mapping of this module was inspected, and nothing else was");
     }
     expect(clean.bytesDiffering == 0, "a clean process matches the file it was loaded from");
+    expect(clean.reason == integrity::kReasonNone, "a completed measurement carries no reason");
     std::printf("clean measurement: mappings=%u compared=%llu differing=%llu\n",
                 clean.mappingsFound,
                 static_cast<unsigned long long>(clean.bytesCompared),
@@ -539,6 +540,8 @@ void selfTextVacuityPaths() {
                        integrity::kStatusUnavailable,
                    "a table with no mapping for this module is unavailable, not clean");
             expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            expect(out.reason == integrity::kReasonSelfMappingNotFound,
+                   "reported as a missing mapping, not as some other failure");
             std::remove(mapsPath);
         } else {
             std::printf("SKIPPED: could not write a synthetic maps table\n");
@@ -563,6 +566,8 @@ void selfTextVacuityPaths() {
                        integrity::kStatusUnavailable,
                    "a mapping whose file cannot supply any bytes is unavailable, not clean");
             expect(out.bytesCompared == 0, "and nothing is claimed to have been compared");
+            expect(out.reason == integrity::kReasonNothingCompared,
+                   "reported as having compared nothing, not as an unreadable table");
             std::remove(mapsPath);
             std::remove(backingPath);
         } else {
@@ -578,6 +583,8 @@ void selfTextFailurePaths() {
                integrity::kStatusUnavailable,
            "an unreadable mapping table is unavailable, not a clean result");
     expect(out.bytesCompared == 0, "nothing is reported as compared when nothing was");
+    expect(out.reason == integrity::kReasonMapsUnreadable,
+           "and says which of the ways to be unavailable this was");
     expect(integrity::measureSelfTextFrom(nullptr, &out) == integrity::kStatusInvalidInput,
            "a null path is invalid input");
     expect(integrity::measureSelfText(nullptr) == integrity::kStatusInvalidInput,

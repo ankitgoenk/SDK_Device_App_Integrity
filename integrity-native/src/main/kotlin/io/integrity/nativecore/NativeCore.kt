@@ -57,6 +57,9 @@ internal interface NativeApi {
      * answer. `null` means the call itself failed.
      */
     fun measureSelfText(): LongArray?
+
+    /** As [measureSelfText], but reading the mapping table from [mapsPath]. For fixtures. */
+    fun measureSelfTextFrom(mapsPath: String): LongArray?
 }
 
 internal object NativeBridge : NativeApi {
@@ -69,6 +72,8 @@ internal object NativeBridge : NativeApi {
 
     override fun measureSelfText(): LongArray? = nativeMeasureSelfText()
 
+    override fun measureSelfTextFrom(mapsPath: String): LongArray? = nativeMeasureSelfTextFrom(mapsPath)
+
     // Registered dynamically in JNI_OnLoad, so the .so exports no Java_* symbol to grep
     // for. CI checks the released library for stray exports rather than trusting this
     // comment (ADR-0002).
@@ -79,6 +84,8 @@ internal object NativeBridge : NativeApi {
     private external fun nativeProbeMappedRead(): Int
 
     private external fun nativeMeasureSelfText(): LongArray?
+
+    private external fun nativeMeasureSelfTextFrom(mapsPath: String): LongArray?
 }
 
 /**
@@ -131,5 +138,13 @@ internal class NativeCore(
         const val MEASURE_BYTES_COMPARED = 2
         const val MEASURE_BYTES_DIFFERING = 3
         const val MEASURE_FIRST_DIFFERENCE = 4
+        const val MEASURE_REASON = 5
+
+        // Mirrors integrity::SelfTextReason in selftext.h.
+        const val REASON_MAPS_UNREADABLE = 1
+        const val REASON_SELF_MAPPING_NOT_FOUND = 2
+        const val REASON_LIBRARY_FILE_UNREADABLE = 3
+        const val REASON_MEMORY_UNREADABLE = 4
+        const val REASON_NOTHING_COMPARED = 5
     }
 }
