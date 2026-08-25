@@ -74,6 +74,14 @@ on a 32-bit ABI, so an unsigned address at or above `0x80000000` would cast nega
 making a detector silently blind on the upper half of a 32-bit device's address space.
 `_FILE_OFFSET_BITS=64` fixes it and a `static_assert(sizeof(off_t) == 8)` keeps it fixed.
 
+Testing that bug is harder than finding it, and the reason generalises. A truncated offset
+makes `pread` fail, so a valid address reports `kStatusUnavailable` — which is also the
+correct answer for an unmapped one. Every absolute assertion in the suite stays green while
+half the address space quietly stops being readable. Faults that *collapse two states into
+the safe-looking one* cannot be caught by asserting a status; they need a relative property.
+Here: if a low address can be read, a high one must be readable too. Where a check like that
+can go vacuous — no address in the run crossing the boundary — assert that it did not.
+
 **4. No dynamic allocation.** Fixed buffers, streamed reads with a hard cap. `STL=none`
 removes libc++'s `operator new` anyway, and an allocator in a security library is one more
 failure mode and one more thing to audit.
