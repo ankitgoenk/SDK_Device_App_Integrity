@@ -64,8 +64,15 @@ Three parts, all of them load-bearing:
    absence of a failure.
 2. **Guard against vacuity.** If the assertion is conditional, assert that its precondition
    actually held. A conditional check that silently skips is a green result proving nothing.
-3. **Make skips visible.** When a check legitimately cannot run, say so in the output, so a
-   run where the property was exercised is distinguishable from one where it was not.
+3. **Make skips visible, and skip only when the capability is genuinely absent.** When a
+   check legitimately cannot run, say so in the output, so a run where the property was
+   exercised is distinguishable from one where it was not.
+
+   Visible is not the same as acceptable, and the second half of this rule was learned the
+   hard way. A test that skips whenever the thing under test reports "unavailable" passes
+   against an implementation that reports unavailable *everywhere* — announcement and all.
+   Establish the prerequisites first: absent, skip and say so; present, require the check
+   to complete.
 
 "I don't know" must never be able to masquerade as "everything is fine" — not in a report to
 the host app, and not in CI.

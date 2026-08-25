@@ -28,6 +28,8 @@ private class FakeApi(private val status: Int = NativeCore.STATUS_OK, private va
     override fun probeUnmappedRead(): Int = NativeCore.STATUS_UNAVAILABLE
 
     override fun probeMappedRead(): Int = NativeCore.STATUS_OK
+
+    override fun measureSelfText(): LongArray? = longArrayOf(0, 1, 4096, 0, 0)
 }
 
 private class FakeDetectionContext : DetectionContext {

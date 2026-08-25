@@ -244,6 +244,11 @@ jobs:
       # google_apis_playstore is a release-keys image without su, so it is the closest
       # thing to a stock device available in CI. If a root detector fires here, that is a
       # finding about the detector being too broad, not a flaky job.
+      #
+      # The native suite runs here as well as on the rooted image, because the self-text
+      # measurement has to hold on both. A clean release-keys image is the one where a
+      # mismatch would be most damning: it would mean the HOOK_SELF_TEXT_MISMATCH design
+      # rests on an assumption that is simply false.
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -252,12 +257,13 @@ jobs:
           script: >-
             ./gradlew :integrity-detector-root:connectedDebugAndroidTest
             -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
+            && ./gradlew :integrity-native:connectedDebugAndroidTest
 
       # An annotation filter that matched nothing would make this negative control pass
       # without ever running on the clean image — the strongest possible "no root signals
       # fired" result, and completely worthless.
       - name: Prove the intended tests actually ran
-        run: tools/check-instrumented-coverage.py integrity-detector-root
+        run: tools/check-instrumented-coverage.py integrity-detector-root integrity-native
 
       - uses: actions/upload-artifact@v4
         if: always()

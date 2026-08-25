@@ -15,6 +15,7 @@
 #include <stddef.h>
 
 #include "safe_read.h"
+#include "selftext.h"
 #include "selfcheck.h"
 #include "status.h"
 
@@ -91,7 +92,38 @@ jint probeMappedRead(JNIEnv* /* env */, jobject /* thiz */) {
     return integrity::kStatusOk;
 }
 
-JNINativeMethod methodTable[3] = {
+/**
+ * Runs the self-text measurement and hands back its counters.
+ *
+ * Counters, not a verdict: PR #12 exists to find out whether a clean process really does
+ * have memory matching disk, and a boolean would already have assumed the answer. The
+ * status travels with them so the caller can tell "compared and found nothing" from "could
+ * not compare", which are the same number of differences and entirely different facts.
+ *
+ * Returns null only if the VM cannot allocate the array, which the Kotlin side treats as a
+ * failed call rather than a clean result.
+ */
+jlongArray measureSelfText(JNIEnv* env, jobject /* thiz */) {
+    integrity::SelfTextMeasurement measurement{};
+    const integrity::NativeStatus status = integrity::measureSelfText(&measurement);
+
+    const jlong values[5] = {
+        static_cast<jlong>(status),
+        static_cast<jlong>(measurement.mappingsFound),
+        static_cast<jlong>(measurement.bytesCompared),
+        static_cast<jlong>(measurement.bytesDiffering),
+        static_cast<jlong>(measurement.firstDifferenceAt),
+    };
+
+    jlongArray out = env->NewLongArray(5);
+    if (out == nullptr) {
+        return nullptr;
+    }
+    env->SetLongArrayRegion(out, 0, 5, values);
+    return out;
+}
+
+JNINativeMethod methodTable[4] = {
     {const_cast<char*>("nativeSelfCheck"),
      const_cast<char*>("(Ljava/lang/String;)I"),
      reinterpret_cast<void*>(selfCheck)},
@@ -101,6 +133,9 @@ JNINativeMethod methodTable[3] = {
     {const_cast<char*>("nativeProbeMappedRead"),
      const_cast<char*>("()I"),
      reinterpret_cast<void*>(probeMappedRead)},
+    {const_cast<char*>("nativeMeasureSelfText"),
+     const_cast<char*>("()[J"),
+     reinterpret_cast<void*>(measureSelfText)},
 };
 
 }  // namespace

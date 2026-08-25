@@ -1,8 +1,11 @@
 package io.integrity.nativecore
 
+import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.IntegrityReport
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -85,5 +88,55 @@ class NativeCoreInstrumentedTest {
         SystemLibraryLoader.load(NativeCore.LIBRARY_NAME)
 
         assertEquals(NativeCore.STATUS_OK, NativeBridge.probeMappedRead())
+    }
+
+    /**
+     * The measurement that decides whether HOOK_SELF_TEXT_MISMATCH is worth building.
+     *
+     * The whole design rests on one assumption: on a legitimate Android process, the
+     * executable pages of this library match the bytes in the `.so` they were loaded from.
+     * If that is false — text relocations being the plausible reason — then what would get
+     * built is a very thorough false-positive generator, so the assumption is tested before
+     * any detector exists. See `docs/detectors/HOOK_SELF_TEXT_MISMATCH.md`.
+     *
+     * Three assertions, not one. `0 differences` must not be able to mean `0 mappings
+     * inspected`, or this recreates exactly the silence the last several changes removed.
+     */
+    @Test
+    fun aCleanProcessMatchesTheLibraryItWasLoadedFrom() {
+        SystemLibraryLoader.load(NativeCore.LIBRARY_NAME)
+
+        val measurement = NativeBridge.measureSelfText()
+        assertNotNull("the measurement call itself failed", measurement)
+        val values = measurement!!
+
+        val status = values[NativeCore.MEASURE_STATUS].toInt()
+        val mappings = values[NativeCore.MEASURE_MAPPINGS]
+        val compared = values[NativeCore.MEASURE_BYTES_COMPARED]
+        val differing = values[NativeCore.MEASURE_BYTES_DIFFERING]
+        val firstAt = values[NativeCore.MEASURE_FIRST_DIFFERENCE]
+
+        // Reported unconditionally: the number is the deliverable of this change, and a
+        // non-zero result is a finding rather than a flake.
+        Log.i(
+            "IntegritySelfText",
+            "self-text measurement: status=$status mappings=$mappings " +
+                "compared=$compared differing=$differing firstAt=$firstAt"
+        )
+
+        assertEquals(
+            "the measurement could not complete; that is 'not checked', never 'clean'",
+            NativeCore.STATUS_OK,
+            status
+        )
+        assertTrue("no executable mapping of this library was inspected", mappings > 0)
+        assertTrue("no bytes were compared, so a zero difference count proves nothing", compared > 0)
+        assertEquals(
+            "this library's executable pages differ from the .so on disk at offset $firstAt " +
+                "($differing of $compared bytes). If this fires on a clean image, the " +
+                "HOOK_SELF_TEXT_MISMATCH design does not proceed in its current form.",
+            0L,
+            differing
+        )
     }
 }
