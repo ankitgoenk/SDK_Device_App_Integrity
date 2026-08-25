@@ -50,43 +50,36 @@ internal class SelfTextDetector(private val api: NativeApi = NativeBridge) : Det
 
     override suspend fun detect(context: DetectionContext): List<Signal> {
         val values = runCatching { api.measureSelfText() }.getOrNull()
-            ?: return listOf(inconclusive("call_failed"))
-        if (values.size < EXPECTED_VALUES) {
-            return listOf(inconclusive("malformed_result"))
-        }
 
-        val status = values[NativeCore.MEASURE_STATUS].toInt()
-        if (status != NativeCore.STATUS_OK) {
-            return listOf(inconclusive(reasonOf(values[NativeCore.MEASURE_REASON].toInt())))
+        // One expression rather than a ladder of early returns: the whole decision table is
+        // five lines, and reading it as a table is how you check the important property —
+        // that nothing falls through to silence except a genuine clean result.
+        return when {
+            values == null -> listOf(inconclusive("call_failed"))
+            values.size < EXPECTED_VALUES -> listOf(inconclusive("malformed_result"))
+            values[NativeCore.MEASURE_STATUS].toInt() != NativeCore.STATUS_OK ->
+                listOf(inconclusive(reasonOf(values[NativeCore.MEASURE_REASON].toInt())))
+            // Belt and braces with the native side, which already refuses to report success
+            // having compared nothing. Zero here would otherwise be indistinguishable from a
+            // clean result, and that confusion is this detector's whole subject.
+            values[NativeCore.MEASURE_BYTES_COMPARED] <= 0L ->
+                listOf(inconclusive("nothing_compared"))
+            values[NativeCore.MEASURE_BYTES_DIFFERING] == 0L -> emptyList()
+            else -> listOf(mismatch(values))
         }
-
-        val compared = values[NativeCore.MEASURE_BYTES_COMPARED]
-        val differing = values[NativeCore.MEASURE_BYTES_DIFFERING]
-
-        // Belt and braces with the native side, which already refuses to report success
-        // having compared nothing. A zero here would otherwise be indistinguishable from a
-        // clean result, and that confusion is the whole subject of this detector's design.
-        if (compared <= 0L) {
-            return listOf(inconclusive("nothing_compared"))
-        }
-        if (differing == 0L) {
-            return emptyList()
-        }
-
-        return listOf(
-            Signal(
-                id = SignalId.HOOK_SELF_TEXT_MISMATCH,
-                category = Category.HOOKING,
-                confidence = Confidence.POSSIBLE,
-                evidence = mapOf(
-                    "region" to "self_text",
-                    "bytesCompared" to compared.toString(),
-                    "bytesDiffering" to differing.toString(),
-                    "firstDifferenceAt" to values[NativeCore.MEASURE_FIRST_DIFFERENCE].toString()
-                )
-            )
-        )
     }
+
+    private fun mismatch(values: LongArray) = Signal(
+        id = SignalId.HOOK_SELF_TEXT_MISMATCH,
+        category = Category.HOOKING,
+        confidence = Confidence.POSSIBLE,
+        evidence = mapOf(
+            "region" to "self_text",
+            "bytesCompared" to values[NativeCore.MEASURE_BYTES_COMPARED].toString(),
+            "bytesDiffering" to values[NativeCore.MEASURE_BYTES_DIFFERING].toString(),
+            "firstDifferenceAt" to values[NativeCore.MEASURE_FIRST_DIFFERENCE].toString()
+        )
+    )
 
     private fun inconclusive(reason: String) = Signal(
         id = SignalId.HOOK_SELF_TEXT_MISMATCH,

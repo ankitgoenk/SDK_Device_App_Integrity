@@ -38,16 +38,17 @@ class SelfTextDetectorInstrumentedTest {
         val length: Int get() = (end - start).toInt()
     }
 
+    private fun describesOwnExecutableMapping(fields: List<String>): Boolean {
+        if (fields.size != 6) return false
+        return fields[1].startsWith("r-x") && fields[5].contains("libintegrity.so")
+    }
+
     /** Finds this library's executable mapping by walking /proc/self/maps independently. */
     private fun findOwnExecutableMapping(): OwnMapping? =
         File("/proc/self/maps").readLines().firstNotNullOfOrNull { line ->
             val fields = line.trim().split(Regex("\\s+"), limit = 6)
             val addresses = fields.firstOrNull()?.split("-").orEmpty()
-            if (fields.size != 6 ||
-                addresses.size != 2 ||
-                !fields[1].startsWith("r-x") ||
-                !fields[5].contains("libintegrity.so")
-            ) {
+            if (!describesOwnExecutableMapping(fields) || addresses.size != 2) {
                 null
             } else {
                 OwnMapping(
