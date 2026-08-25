@@ -134,9 +134,14 @@ jobs:
           # google_apis is a userdebug image: it ships su and reports test-keys, so the
           # root detectors fire here. Clean-only tests are excluded and run in the
           # clean-baseline job against a release-keys image instead.
-          script: >-
-            ./gradlew connectedDebugAndroidTest
-            -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
+          # The measurement's numbers go to logcat, so they are dumped into the job log
+          # afterwards. A passing assertion proves differing == 0; the counts are what say
+          # how much was actually inspected to reach it, and PR #12 exists to record them.
+          script: |
+            set -euo pipefail
+            ./gradlew connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
+            adb logcat -d -s IntegritySelfText:I
 
       # connectedAndroidTest reports success when it runs zero tests, so this job used to
       # pass while executing no root tests at all: the module's only instrumented test was
@@ -254,10 +259,14 @@ jobs:
           api-level: 34
           arch: x86_64
           target: google_apis_playstore
-          script: >-
-            ./gradlew :integrity-detector-root:connectedDebugAndroidTest
-            -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
-            && ./gradlew :integrity-native:connectedDebugAndroidTest
+          script: |
+            # set -e is load-bearing: these used to be joined with &&, and as plain lines a
+            # failing test followed by a succeeding logcat dump would leave the job green.
+            set -euo pipefail
+            ./gradlew :integrity-detector-root:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
+            ./gradlew :integrity-native:connectedDebugAndroidTest
+            adb logcat -d -s IntegritySelfText:I
 
       # An annotation filter that matched nothing would make this negative control pass
       # without ever running on the clean image — the strongest possible "no root signals
