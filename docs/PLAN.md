@@ -153,7 +153,37 @@ enabling the native module by default, measure how often loading genuinely fails
 whether that weight survives contact with real devices. This is the one place where the
 SDK's own robustness problem masquerades as a device-integrity signal.
 
+### Phase 3b prerequisites — settle these before writing detection code
+
+**1. The size/exception trade, measured rather than argued.** The library is at 219 KB of a
+256 KB budget for one string comparison. Build and record the arm64-v8a size for three
+configurations before choosing:
+
+| Configuration | Containment | Size |
+| --- | --- | --- |
+| `c++_static` + `<stdexcept>` (today) | `catch (...)` plus thrown `std::runtime_error` | 219 KB |
+| `c++_static`, no `<stdexcept>` | `catch (...)` only, status codes for our own errors | ? |
+| `-fno-exceptions`, `ANDROID_STL=none` | status codes only, no unwinding | ? |
+
+The middle row is the one worth measuring first, and it is missing from the obvious
+"exceptions or not" framing. Most of that 219 KB is probably not exception support as such
+but the libc++ that `std::runtime_error` drags in — `std::string`, RTTI, the lot. Keeping
+`catch (...)` while never throwing an STL type may buy most of the space at none of the
+cost. Measure it; do not reason about it.
+
+Whatever wins, record the number and the reason, because phase 3b spends the remainder.
+
+**2. Make `APP_NATIVE_LIB_MISMATCH` diagnosable.** Report the expected and actual tokens.
+They are SDK version strings, not secrets, and an attacker reads them out of the `.so`
+anyway. Without them a mismatch cannot be told apart from a dependency-skew bug in the
+host's build, which is the likeliest cause by far.
+
 ### Phase 3b — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
+
+Start with **one** capability carried all the way through — signal, clean fixture, positive
+fixture, known bypass, CI, shadow mode — before adding a second. The catalog lists eighteen
+`HOOK_*` signals; building them as a batch would reproduce exactly the failure phase 3a was
+created to avoid, with detection bugs and infrastructure bugs arriving together.
 Signals `HOOK_*`. JVM layer (stack-trace probes, Xposed classes/artefacts, `TracerPid`,
 debugger flags) plus the **native** layer: `/proc/self/maps` and thread-name scanning,
 Frida port/handshake probe, memory scan for agent fingerprints, function-prologue and
