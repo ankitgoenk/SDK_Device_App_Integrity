@@ -272,3 +272,24 @@ jobs:
             -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/integrity.cpp
+
+  native-size-matrix:
+    name: Native size trade (measurement)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install the pinned NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
+
+      # Answers the phase 3b prerequisite in docs/PLAN.md with numbers rather than
+      # argument. Also a canary: it fails if the native code stops building under
+      # -fno-exceptions, which would quietly remove an option before we have chosen.
+      - name: Measure three configurations
+        run: tools/measure-native-size.sh arm64-v8a
