@@ -18,7 +18,8 @@ class ReportWireTest {
         signals: List<Signal> = emptyList(),
         verdict: Verdict = Verdict.TRUSTED,
         riskScore: Int = 0,
-        categoryScores: Map<Category, Int> = emptyMap()
+        categoryScores: Map<Category, Int> = emptyMap(),
+        challenge: String? = null
     ) = IntegrityReport(
         verdict = verdict,
         riskScore = riskScore,
@@ -28,7 +29,8 @@ class ReportWireTest {
         depth = Depth.FULL,
         generatedAtMillis = 1_735_689_600_000L,
         sdkVersion = "0.1.0-test",
-        reportId = "fixed-report-id"
+        reportId = "fixed-report-id",
+        challenge = challenge
     )
 
     private fun signal(
@@ -168,10 +170,27 @@ class ReportWireTest {
 
     @Test
     fun theChallengeIsEchoedAndAbsenceIsExplicit() {
-        assertThat(ReportWire.canonicalJson(report(), challenge = "nonce-1"))
+        assertThat(ReportWire.canonicalJson(report(challenge = "nonce-1")))
             .contains("\"challenge\":\"nonce-1\"")
-        assertThat(ReportWire.canonicalJson(report(), challenge = null))
+        assertThat(ReportWire.canonicalJson(report(challenge = null)))
             .contains("\"challenge\":null")
+    }
+
+    /**
+     * The binding is made where the evidence is gathered, or not at all.
+     *
+     * There is deliberately no way to supply a challenge at serialisation time, so this
+     * asserts the consequence: two reports differing only in challenge serialise
+     * differently, and no call can make an unchallenged report claim a nonce.
+     */
+    @Test
+    fun aChallengeCannotBeAttachedAfterTheEvidenceWasGathered() {
+        val unchallenged = report()
+        val challenged = report(challenge = "nonce-1")
+
+        assertThat(ReportWire.canonicalJson(unchallenged)).contains("\"challenge\":null")
+        assertThat(ReportWire.canonicalJson(unchallenged))
+            .isNotEqualTo(ReportWire.canonicalJson(challenged))
     }
 
     @Test

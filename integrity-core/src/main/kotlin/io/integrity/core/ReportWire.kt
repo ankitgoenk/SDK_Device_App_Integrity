@@ -42,11 +42,13 @@ public object ReportWire {
     private const val NIBBLE_MASK = 0xF
 
     /**
-     * @param challenge the server-issued nonce this evaluation answers, echoed so the
-     *   backend can bind report to request. Absent for an unchallenged evaluation, which
-     *   the backend should treat as unbindable rather than as fresh.
+     * The challenge is read from [report], never passed in.
+     *
+     * A `canonicalJson(report, challenge)` overload would be an API for stamping a fresh
+     * nonce onto evidence gathered before it was issued — replay, spelled as a convenience
+     * parameter. The binding is made where the evidence is gathered or not at all.
      */
-    public fun canonicalJson(report: IntegrityReport, challenge: String? = null): String {
+    public fun canonicalJson(report: IntegrityReport): String {
         val advisory = obj(
             "categoryScores" to obj(
                 report.categoryScores.entries
@@ -58,7 +60,7 @@ public object ReportWire {
         )
 
         return obj(
-            "challenge" to (challenge?.let { str(it) } ?: "null"),
+            "challenge" to (report.challenge?.let { str(it) } ?: "null"),
             "clientAdvisory" to advisory,
             // Per mille, not a float. See rule 3 above.
             "coveragePermille" to num(coveragePermille(report.coverage)),

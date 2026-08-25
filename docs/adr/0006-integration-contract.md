@@ -282,7 +282,12 @@ from app open is not assignable. Compiler, not paragraph.
    and nothing will notice. **The implementation PR must bring `tsc --noEmit` into CI before
    this contract is described as verified** — the same lesson as the detekt configuration
    that reported zero findings while running a smaller ruleset than the one gating merges.
-5. **Nothing implements attestation yet.** §6 rests on Play Integrity, the app now owns the
+5. **The Kotlin report does not mirror the wire's fencing.** `verdict`, `riskScore` and
+   `categoryScores` serialise under `clientAdvisory`, but remain top-level properties on
+   `IntegrityReport`, so `report.verdict` still reads as an answer in Kotlin while
+   `report.clientAdvisory.verdict` would read as a hint. Grouping them is a public API
+   change and belongs in its own PR rather than bundled with the challenge work.
+6. **Nothing implements attestation yet.** §6 rests on Play Integrity, the app now owns the
    request, and no such call exists on either side. The security value of the pipeline is
    therefore unimplemented today — worth stating plainly before anyone plans around it.
 
