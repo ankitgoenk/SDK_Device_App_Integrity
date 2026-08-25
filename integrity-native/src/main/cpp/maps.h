@@ -4,8 +4,8 @@
 // toolchain in seconds, and the half most likely to be handed malformed input.
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "status.h"
 

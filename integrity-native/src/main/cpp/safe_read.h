@@ -9,8 +9,8 @@
 // whether /proc/self/mem is readable. Callers must treat kStatusUnavailable as normal.
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "status.h"
 

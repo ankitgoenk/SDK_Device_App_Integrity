@@ -56,6 +56,12 @@ dereferencing a pointer. An unmapped offset returns an error instead of a fault,
 converts a fatal condition into a status code. To be confirmed on-device in phase 3b before
 being relied on.
 
+**3a. No C++ standard library headers in shipped sources.** `ANDROID_STL=none` provides no
+libc++, so `<cstddef>`, `<cstdint>` and the rest do not exist — only the libc headers do.
+Use `<stddef.h>`, `<stdint.h>`. This is enforced in CI by compiling each shipped source
+with `-nostdinc++`, which reproduces the constraint in seconds rather than two minutes into
+an NDK build.
+
 **4. No dynamic allocation.** Fixed buffers, streamed reads with a hard cap. `STL=none`
 removes libc++'s `operator new` anyway, and an allocator in a security library is one more
 failure mode and one more thing to audit.
