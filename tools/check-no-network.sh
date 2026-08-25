@@ -95,8 +95,18 @@ for target in "$@"; do
       work=$(mktemp -d)
       unzip -q -o "$target" -d "$work"
       echo "--- $target"
-      [ -f "$work/classes.jar" ] && { mkdir -p "$work/classes"; unzip -q -o "$work/classes.jar" -d "$work/classes"; check_classes "$work/classes" "$target"; }
-      while IFS= read -r so; do check_so "$so"; done < <(find "$work" -name '*.so')
+      inspected=0
+      if [ -f "$work/classes.jar" ]; then
+        mkdir -p "$work/classes"
+        unzip -q -o "$work/classes.jar" -d "$work/classes"
+        check_classes "$work/classes" "$target"
+        inspected=$((inspected + 1))
+      fi
+      while IFS= read -r so; do check_so "$so"; inspected=$((inspected + 1)); done < <(find "$work" -name '*.so')
+      # An aar whose classes.jar is absent or renamed used to print its header, inspect
+      # nothing, and let the run report OK. Silently inspecting nothing is the failure mode
+      # this whole gate exists to avoid, so it is an error rather than a quiet pass.
+      [ "$inspected" -gt 0 ] || { rm -rf "$work"; fail "$target: nothing inspectable inside (no classes.jar, no .so)"; }
       rm -rf "$work"
       ;;
     *.jar)

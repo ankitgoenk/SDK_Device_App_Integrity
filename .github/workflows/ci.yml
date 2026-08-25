@@ -101,22 +101,24 @@ jobs:
         run: |
           set -euo pipefail
           tools/check-no-network.sh --self-test
-          shipped=0
-          for aar in $(find . -path '*/build/outputs/aar/*-release.aar' -not -path './sample*'); do
-            tools/check-no-network.sh "$aar"
-            shipped=$((shipped + 1))
-          done
           # integrity-model publishes a jar, not an aar. The aar-only glob left the one module
           # whose whole purpose is to be consumed by a server outside the gate that says the
-          # SDK performs no network IO.
-          for jar in $(find . -path '*/build/libs/*.jar' -not -name '*-sources.jar' \
-                            -not -name '*-javadoc.jar' -not -path './sample*' -not -path './build-logic/*'); do
-            tools/check-no-network.sh "$jar"
-            shipped=$((shipped + 1))
-          done
-          # A find that matches nothing would otherwise loop zero times and report success.
-          test "$shipped" -ge 2 || { echo "gate inspected $shipped artifact(s); expected >= 2" >&2; exit 1; }
-          echo "no-network gate inspected $shipped shipped artifact(s)"
+          # SDK performs no network IO. integrity-baseline-plugin is a jar too and is covered
+          # deliberately: it is published, so "nothing shipped" should mean it.
+          mapfile -t artifacts < <(
+            find . \( -path '*/build/outputs/aar/*-release.aar' \
+                   -o \( -path '*/build/libs/*.jar' -not -name '*-sources.jar' \
+                                                    -not -name '*-javadoc.jar' \) \) \
+                 -not -path './sample*' -not -path './build-logic/*' | sort
+          )
+          # A find that matches nothing would otherwise pass a zero-length list and succeed.
+          test "${#artifacts[@]}" -ge 2 \
+            || { echo "gate found ${#artifacts[@]} artifact(s); expected >= 2" >&2; exit 1; }
+          # One invocation, so the closing "nothing shipped can name a networking API" is
+          # printed once and is true of everything inspected. Called per artifact it printed
+          # that global claim after each one, having checked only that one.
+          tools/check-no-network.sh "${artifacts[@]}"
+          echo "no-network gate inspected ${#artifacts[@]} shipped artifact(s)"
 
   instrumented:
     name: Instrumented smoke test
