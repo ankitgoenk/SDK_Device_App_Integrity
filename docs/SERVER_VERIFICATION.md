@@ -63,6 +63,25 @@ covered by round-trip tests; changing it is a schema-version bump.
 - Rate-limit report submission per device/session; a burst of reports with different verdicts
   is evidence of tampering experiments.
 
+**Implemented** in `sample-backend` as `ChallengeStore` / `InMemoryChallengeStore`. Three
+things about it are not obvious from the bullets above and are worth stating, because each was
+either a bug in the first draft or a property a reasonable implementation would miss:
+
+- *Single use has to be atomic, not checked.* `if (spent) reject; spent = true` satisfies every
+  sequential test and loses roughly 3% of contended rounds. The store uses a compare-and-set,
+  and a replacement backed by shared storage must do the same rather than a read-then-write.
+- *Expiry is decided against the server clock alone.* The report's `generatedAtMillis` is not a
+  parameter of redemption. It is checked separately as a skew signal (bullet 2 above), but it
+  can never affect whether a challenge is still live — otherwise the client extends the window
+  that exists to constrain it.
+- *Validation precedes consumption.* A challenge presented with the wrong session or purpose is
+  rejected without being spent. Consuming it first would let anyone holding a stolen challenge
+  value burn a victim's challenge, converting a failed forgery into a denial of service.
+
+A challenge TTL is not a decision window: 120 s to answer a challenge, 30 minutes for the
+decision that results (ADR-0006). A test asserts the former stays below the latter, because the
+tempting simplification is to unify them.
+
 ## Play Integrity
 
 - **Standard requests** for routine checks: cheap, low latency, uses a warm token provider.
