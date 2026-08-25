@@ -110,6 +110,13 @@ export interface IntegrityDecision {
   readonly actions?: readonly string[];
 }
 
+/**
+ * Vocabulary for the app's own action table — deliberately two values and no operations.
+ *
+ * The app team owns which operations are sensitive, and that list lives in the app. The SDK
+ * provides action-bound evaluation and never enumerates call sites. If a
+ * `SENSITIVE_OPERATIONS` constant ever appears in this package, the architecture has leaked.
+ */
 export type ActionSensitivity = 'ORDINARY' | 'SENSITIVE';
 
 /**

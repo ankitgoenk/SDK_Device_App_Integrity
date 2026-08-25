@@ -302,15 +302,60 @@ Items 1, 2 and 5 are behavioural and want tests that fail when the property is b
 the mutation gate in `tools/mutate-native.py` is the model: assert that broken code fails,
 not merely that correct code passes.
 
-## Unresolved — these need answers before implementation
+## Resolved
 
-1. **Which operations are "sensitive"?** The behaviour is settled above; the list is not,
-   and it is a product decision rather than an engineering one.
-2. **Numeric freshness windows.** The mechanism is settled — server-authoritative
-   `expiresAtMillis`, challenge-bound decisions for sensitive actions — but the actual
-   durations are not.
-3. **Does the backend recompute scoring from signals, or consume `clientAdvisory`?**
+**1. The SDK does not know what "sensitive" means.** The app team owns the list of sensitive
+operations, and it lives in the app. The SDK provides *action-bound evaluation* —
+`evaluate(challenge)` — and nothing more. It never enumerates operations, never maps an
+operation to a policy, and has no notion of which call site is important.
+
+`ActionSensitivity` in the bridge is vocabulary for the app's own table, not a list: two
+values, no operations. If the SDK ever grows a `SENSITIVE_OPERATIONS` constant, that is the
+architecture leaking and it should be reverted rather than extended.
+
+**2. Ordinary-use decisions are valid for 30 minutes, initially.** Backend-authoritative and
+configurable: the number is the server's to change without an app release, and the client
+may shorten it but never extend it (§5). Sensitive actions do **not** consume this window —
+they require a fresh action-specific challenge and the decision bound to it, so the ordinary
+window is irrelevant to them by construction rather than by discipline.
+
+**3. Play Integrity is the authenticated anchor for production decisions.** SDK signals
+remain untrusted client observations. The contract keeps the two apart, and the shape below
+is what "incorporated without coupling" means concretely.
+
+### Where the Play Integrity token is obtained, and why it matters
+
+The app requests it, not the SDK.
+
+Requesting a token is a network round trip through Play Services. Putting that call inside
+the SDK would mean the SDK causes network traffic attributable to the host app, with latency
+and failure modes invisible to the app's own Axios layer and its retry policy — which is
+what ADR-0003 exists to prevent, whether or not the SDK literally opens the socket itself.
+The app already holds the challenge from the backend, so it is also the natural place.
+
+```
+backend ──challenge──► app ──┬──► Play Integrity  ──► signed token ──┐
+                             │                                       ├──► backend verifies
+                             └──► SDK.evaluate(challenge) ──► report ┘
+```
+
+The nonce binds both halves: it goes into Play Integrity's `requestHash` and is echoed in
+our report. That is a **protocol** coupling, which is wanted. There is no **model** coupling:
+the SDK's evidence has no attestation concept, no ATT_* verdict, and no awareness that a
+token exists. The backend combines them and owns the scoring policy entirely, so that policy
+can change without touching the SDK's evidence model at all.
+
+**Consequence for `integrity-attestation-play`.** That module is currently an empty scaffold
+whose stated plan is to produce `ATT_*` detectors from Play Integrity requests on-device.
+Under this decision it should not do that: token acquisition belongs to the app. The module
+should either be removed or reduced to server-side documentation of how the token is
+verified. Flagged rather than changed here — it is a module deletion, and this is a design
+PR.
+
+## Still open
+
+1. **Does the backend recompute scoring from signals, or consume `clientAdvisory`?**
    Recomputing is the only version that survives a hostile client.
-4. **Nonce lifetime and issuance** — per session, per sensitive action, or per app open?
-5. **Is Play Integrity in scope now?** If not, §6 has no anchor and the backend should treat
-   every report as unauthenticated until it is.
+2. **Nonce lifetime and issuance** — per session, per sensitive action, or per app open?
+   Item 2 above settles that a sensitive action needs its own; whether an ordinary-use
+   challenge is minted per session or per app open is still open.
