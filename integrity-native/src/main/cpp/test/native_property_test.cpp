@@ -257,7 +257,14 @@ std::string randomNearMiss() {
         randomBelow(4) == 0 ? kSharingAlphabet[randomBelow(5)] : (randomBelow(2) ? 'p' : 's'),
         '\0',
     };
-    std::string line = start + "-" + end + " " + perms + " 00000000 fd:00 1234 /lib/x.so";
+    // The trailing fields get their own variation: they are parsed and mostly discarded,
+    // which is exactly the kind of code whose bounds stop being tested.
+    const std::string offset = randomBelow(3) == 0 ? boundaryHex() : randomHex(1 + randomBelow(8));
+    const std::string inode = randomBelow(4) == 0
+        ? std::string(1 + randomBelow(30), '9')
+        : std::to_string(randomBelow(100000));
+    std::string line =
+        start + "-" + end + " " + perms + " " + offset + " fd:00 " + inode + " /lib/x.so";
 
     switch (randomBelow(10)) {
         case 0: return line;                                        // untouched

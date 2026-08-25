@@ -177,6 +177,16 @@ void validMappingTests() {
            "an absent end address is not read as zero");
     expect(parse("aaaa-bbbb r--p  00:00 0", &range) == integrity::kStatusParseFailed,
            "an absent file offset is not read as zero");
+
+    // The inode is parsed and then discarded, which makes it easy to assume its bounds do
+    // not matter. They do: a number that wraps is a number we read wrongly, and a line
+    // carrying one did not come from the kernel. Checked the same way as the hex fields.
+    {
+        const std::string hugeInode =
+            "1000-2000 r--p 00000000 00:00 " + std::string(30, '9') + " /lib/x.so";
+        expect(parse(hugeInode, &range) == integrity::kStatusParseFailed,
+               "an inode too large to represent is rejected, not wrapped");
+    }
 }
 
 // Case 2: malformed input is rejected, never accepted-with-garbage.
