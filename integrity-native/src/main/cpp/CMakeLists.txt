@@ -20,7 +20,9 @@ target_compile_definitions(integrity PRIVATE
 
 target_compile_options(integrity PRIVATE
         -Wall -Wextra -Werror
-        -fexceptions
+        # No exception runtime: nothing here throws, and the fault that phase 3b risks was
+        # never catchable by one. Every failure travels as a [[nodiscard]] NativeStatus.
+        -fno-exceptions
         -fvisibility=hidden
         -ffunction-sections
         -fdata-sections)

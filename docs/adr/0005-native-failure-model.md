@@ -107,5 +107,13 @@ outcome. Fix the read that caused it; do not paper over it.
 - **Test consequence:** `provokeFailure()` becomes meaningless — with no exceptions it can
   only return a constant, which tests nothing. It is replaced by feeding a malformed
   `/proc` fixture to the real parser and asserting a status code and a surviving process.
-- **Enforced:** the `native-size-matrix` CI job already fails if the code stops building
-  without exceptions, so this decision cannot be silently reversed.
+- **Enforced:** three ways, because this decision is exactly the kind that erodes quietly.
+  The host and JNI compilations run under `-fno-exceptions`, so a reintroduced `try`/`catch`
+  fails to compile. The `native-size-guard` job builds the production sources and fails if
+  the library exceeds its ceiling, which an STL runtime (~214 KB) cannot fit under. And the
+  instrumented suite asserts both directions of the read path on a device, so a build that
+  became conservative enough to return `kStatusUnavailable` for everything is caught rather
+  than mistaken for a smaller, safer library.
+
+**Status: implemented.** `ANDROID_STL=none` and `-fno-exceptions` ship as of the flip;
+219,472 bytes became 5,528.

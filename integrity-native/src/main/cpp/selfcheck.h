@@ -10,8 +10,10 @@ enum SelfCheckStatus {
     kOk = 0,
     kTokenMismatch = 1,
     kBadArgument = 2,
-    kProvokedFailure = 3,
 };
+// kProvokedFailure = 3 was the code the JNI catch block returned. Removed with the catch
+// block: nothing here throws, so it could only ever have been reached by a bug that a
+// catch(...) would not have contained anyway.
 
 /** The build token compiled into this library. */
 const char* buildToken();
