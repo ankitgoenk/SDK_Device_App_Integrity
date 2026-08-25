@@ -282,8 +282,9 @@ from app open is not assignable. Compiler, not paragraph.
    and nothing will notice. **The implementation PR must bring `tsc --noEmit` into CI before
    this contract is described as verified** — the same lesson as the detekt configuration
    that reported zero findings while running a smaller ruleset than the one gating merges.
-5. **`integrity-attestation-play` is a stub.** §6 rests on it, so the security value of the
-   whole pipeline is currently unimplemented — worth stating before anyone plans around it.
+5. **Nothing implements attestation yet.** §6 rests on Play Integrity, the app now owns the
+   request, and no such call exists on either side. The security value of the pipeline is
+   therefore unimplemented today — worth stating plainly before anyone plans around it.
 
 ## What CI must enforce once this is built
 
@@ -302,15 +303,82 @@ Items 1, 2 and 5 are behavioural and want tests that fail when the property is b
 the mutation gate in `tools/mutate-native.py` is the model: assert that broken code fails,
 not merely that correct code passes.
 
-## Unresolved — these need answers before implementation
+## Resolved
 
-1. **Which operations are "sensitive"?** The behaviour is settled above; the list is not,
-   and it is a product decision rather than an engineering one.
-2. **Numeric freshness windows.** The mechanism is settled — server-authoritative
-   `expiresAtMillis`, challenge-bound decisions for sensitive actions — but the actual
-   durations are not.
-3. **Does the backend recompute scoring from signals, or consume `clientAdvisory`?**
-   Recomputing is the only version that survives a hostile client.
-4. **Nonce lifetime and issuance** — per session, per sensitive action, or per app open?
-5. **Is Play Integrity in scope now?** If not, §6 has no anchor and the backend should treat
-   every report as unauthenticated until it is.
+**1. The SDK does not know what "sensitive" means.** The app team owns the list of sensitive
+operations, and it lives in the app. The SDK provides *action-bound evaluation* —
+`evaluate(challenge)` — and nothing more. It never enumerates operations, never maps an
+operation to a policy, and has no notion of which call site is important.
+
+`ActionSensitivity` in the bridge is vocabulary for the app's own table, not a list: two
+values, no operations. If the SDK ever grows a `SENSITIVE_OPERATIONS` constant, that is the
+architecture leaking and it should be reverted rather than extended.
+
+**2. Ordinary-use decisions are valid for 30 minutes, initially.** Backend-authoritative and
+configurable: the number is the server's to change without an app release, and the client
+may shorten it but never extend it (§5). Sensitive actions do **not** consume this window —
+they require a fresh action-specific challenge and the decision bound to it, so the ordinary
+window is irrelevant to them by construction rather than by discipline.
+
+**3. Play Integrity is the authenticated anchor for production decisions.** SDK signals
+remain untrusted client observations. The contract keeps the two apart, and the shape below
+is what "incorporated without coupling" means concretely.
+
+### Where the Play Integrity token is obtained, and why it matters
+
+The app requests it, not the SDK.
+
+Requesting a token is a network round trip through Play Services. Putting that call inside
+the SDK would mean the SDK causes network traffic attributable to the host app, with latency
+and failure modes invisible to the app's own Axios layer and its retry policy — which is
+what ADR-0003 exists to prevent, whether or not the SDK literally opens the socket itself.
+The app already holds the challenge from the backend, so it is also the natural place.
+
+```
+backend ──challenge──► app ──┬──► Play Integrity  ──► signed token ──┐
+                             │                                       ├──► backend verifies
+                             └──► SDK.evaluate(challenge) ──► report ┘
+```
+
+The nonce binds both halves: it goes into Play Integrity's `requestHash` and is echoed in
+our report. That is a **protocol** coupling, which is wanted. There is no **model** coupling:
+the SDK's evidence has no attestation concept, no ATT_* verdict, and no awareness that a
+token exists. The backend combines them and owns the scoring policy entirely, so that policy
+can change without touching the SDK's evidence model at all.
+
+**`integrity-attestation-play` is removed.** It was an empty scaffold whose stated plan was
+to produce `ATT_*` detectors from on-device Play Integrity requests, which this decision
+rules out. Nothing was kept, because nothing it could do is both useful and permitted: a
+thin wrapper around the token request is still SDK code originating network traffic, and the
+app can depend on `com.google.android.play:integrity` directly without our help.
+
+The `ATT_*` signal identifiers stay. The catalog already marks every one of them `SRV`, and
+`ATT_APP_NOT_RECOGNISED` sits in `DECISIVE_SIGNALS`, so they are shared vocabulary between
+this SDK and the backend rather than client detectors — the same scoring logic can run
+server-side where those signals actually exist. The module was the inconsistency; the
+vocabulary was always right.
+
+**And the SDK never verifies the token.** Verification is where the authoritative decision
+lives, so it belongs entirely to the backend. A client that graded Google's answer about
+itself would be exactly the circularity this architecture removes.
+
+## Resolved: scoring authority and nonce issuance
+
+**The backend recomputes the score from the signals.** `clientAdvisory` is diagnostics and
+telemetry — useful for spotting divergence between what the client concluded and what the
+server concludes, which is itself interesting — but a compromised client can put anything in
+those fields, so consuming them as a decision would make the whole pipeline decorative.
+
+**Ordinary-use challenges are issued per app session.** One challenge at initialisation, one
+evaluation, one decision valid for its window. Sensitive actions get their own challenge
+minted for the action, as above. That keeps the common path cheap and reserves the
+round trip for the operations that justify it.
+
+```
+app open  ──► challenge ──► evaluate ──► decision (≤ window)   once per session
+sensitive ──► challenge ──► evaluate ──► decision (this action) per action
+```
+
+All decisions in this ADR are now settled. Nothing further blocks implementation, which
+should begin with the CI gates in "What CI must enforce once this is built" rather than with
+the bridge.

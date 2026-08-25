@@ -24,7 +24,6 @@ include(":integrity-detector-hooking")
 include(":integrity-detector-app")
 include(":integrity-detector-environment")
 include(":integrity-detector-emulator")
-include(":integrity-attestation-play")
 include(":integrity-testing")
 
 // --- Tooling -----------------------------------------------------------
