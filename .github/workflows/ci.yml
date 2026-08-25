@@ -256,10 +256,13 @@ jobs:
       - uses: actions/checkout@v4
       # The pure half of the native core carries no Android headers precisely so it can be
       # tested here. Logic that can only run on a device is logic that rarely gets run.
+      # -fno-exceptions matches what the .so is built with. Syntax-checking under the flag
+      # is not the same as running under it, and the host suite is where the read path's
+      # positive direction is asserted.
       - name: Build and run the native host tests
         run: |
           set -euo pipefail
-          g++ -std=c++17 -Wall -Wextra -Werror \
+          g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/selfcheck.cpp \
             integrity-native/src/main/cpp/maps.cpp \
@@ -270,7 +273,7 @@ jobs:
       - name: Type-check the JNI boundary against the host JDK headers
         run: |
           set -euo pipefail
-          g++ -std=c++17 -Wall -Wextra -Werror -fsyntax-only \
+          g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -fsyntax-only \
             -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/integrity.cpp
@@ -287,7 +290,7 @@ jobs:
       - name: Build and run the native host tests as 32-bit
         run: |
           set -euo pipefail
-          g++ -m32 -std=c++17 -Wall -Wextra -Werror \
+          g++ -m32 -std=c++17 -Wall -Wextra -Werror -fno-exceptions \
             -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
             integrity-native/src/main/cpp/selfcheck.cpp \
             integrity-native/src/main/cpp/maps.cpp \
@@ -309,8 +312,8 @@ jobs:
             echo "$f builds without libc++"
           done
 
-  native-size-matrix:
-    name: Native size trade (measurement)
+  native-size-guard:
+    name: Native size guard
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -324,8 +327,9 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager --install "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
 
-      # Answers the phase 3b prerequisite in docs/PLAN.md with numbers rather than
-      # argument. Also a canary: it fails if the native code stops building under
-      # -fno-exceptions, which would quietly remove an option before we have chosen.
-      - name: Measure three configurations
-        run: tools/measure-native-size.sh arm64-v8a
+      # The measurement job that informed this decision has become the guard that keeps
+      # it. It builds the production sources unmodified — the previous version generated
+      # rewritten variant copies, and this PR's changes would have made those rewrites
+      # silently match nothing while the job still reported three sizes.
+      - name: Check the shipped library against its ceiling
+        run: tools/check-native-size.sh arm64-v8a

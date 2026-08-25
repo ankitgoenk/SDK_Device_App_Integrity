@@ -16,11 +16,17 @@ android {
                 // detectable without a digest baseline (that arrives in phase 4).
                 //
                 // Passed as a cache variable rather than by overriding CMAKE_CXX_FLAGS,
-                // which AGP also populates. c++_static because the boundary catches C++
-                // exceptions; ANDROID_STL=none cannot support that.
+                // which AGP also populates.
+                //
+                // ANDROID_STL=none: the boundary no longer catches C++ exceptions, because
+                // the failure it was catching does not exist. Nothing here throws, and the
+                // failure phase 3b actually risks — a SIGSEGV while reading a mapping that
+                // changed underneath us — was never catchable (ADR-0005). Measured: the
+                // c++_static runtime cost 214 KB of a 256 KB budget to insure against
+                // nothing.
                 arguments += listOf(
                     "-DINTEGRITY_TOKEN=${IntegrityBuild.VERSION}",
-                    "-DANDROID_STL=c++_static"
+                    "-DANDROID_STL=none"
                 )
             }
         }

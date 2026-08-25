@@ -65,4 +65,25 @@ class NativeCoreInstrumentedTest {
 
         assertEquals(NativeCore.STATUS_UNAVAILABLE, NativeBridge.probeUnmappedRead())
     }
+
+    /**
+     * The other direction, and the one the flip to `ANDROID_STL=none` / `-fno-exceptions`
+     * makes worth asserting on a device.
+     *
+     * The test above passes just as happily against an implementation that reports
+     * `kStatusUnavailable` for *every* address — which is precisely what `off_t`
+     * truncation did on 32-bit ABIs. A build that became quietly more conservative would
+     * look identical to a correct one, and the host tests cannot see it: they are compiled
+     * by the host toolchain, not with the NDK settings this PR changes.
+     *
+     * So: a mapped address must still read, on a real device, under the shipped build
+     * configuration. The native side also compares the bytes, because a read that reports
+     * success while copying nothing is the same collapse in a different hat.
+     */
+    @Test
+    fun aMappedAddressStillReadsSuccessfully() {
+        SystemLibraryLoader.load(NativeCore.LIBRARY_NAME)
+
+        assertEquals(NativeCore.STATUS_OK, NativeBridge.probeMappedRead())
+    }
 }

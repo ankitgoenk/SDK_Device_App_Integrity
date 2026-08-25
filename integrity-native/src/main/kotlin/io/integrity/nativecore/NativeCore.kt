@@ -37,6 +37,16 @@ internal interface NativeApi {
      * /proc/self/mem assumption is confirmed on a real device.
      */
     fun probeUnmappedRead(): Int
+
+    /**
+     * Reads an address that certainly is mapped, returning the status it produced.
+     *
+     * The counterpart to [probeUnmappedRead]. On its own that one cannot distinguish a
+     * working read path from one that fails for everything, which is exactly the collapse
+     * `off_t` truncation caused on 32-bit ABIs. See CONTRIBUTING.md, "Testing around the
+     * 'couldn't verify' state".
+     */
+    fun probeMappedRead(): Int
 }
 
 internal object NativeBridge : NativeApi {
@@ -45,12 +55,16 @@ internal object NativeBridge : NativeApi {
 
     override fun probeUnmappedRead(): Int = nativeProbeUnmappedRead()
 
+    override fun probeMappedRead(): Int = nativeProbeMappedRead()
+
     // Registered dynamically in JNI_OnLoad, so the .so exports no Java_* symbol to grep
     // for. CI checks the released library for stray exports rather than trusting this
     // comment (ADR-0002).
     private external fun nativeSelfCheck(expected: String): Int
 
     private external fun nativeProbeUnmappedRead(): Int
+
+    private external fun nativeProbeMappedRead(): Int
 }
 
 /**
@@ -95,5 +109,6 @@ internal class NativeCore(
         // values above so a confusion between the two shows up as an obviously wrong
         // number rather than a plausible one.
         const val STATUS_UNAVAILABLE = 11
+        const val STATUS_INTERNAL_ERROR = 13
     }
 }
