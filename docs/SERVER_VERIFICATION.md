@@ -124,6 +124,27 @@ If we ever want the backend to reason about coverage properly, the SDK has to em
 "this detector ran and found nothing" marker per detector. That is an SDK change and deserves
 its own ADR; it is not a backend problem to solve.
 
+## Enforcement status of the ADR-0006 checklist
+
+ADR-0006 listed what CI must reject before the contract counts as implemented. That record is
+not edited after acceptance, so the running score lives here. Update this table in the same PR
+as the gate.
+
+| # | Property | Enforced by |
+| --- | --- | --- |
+| 1 | No client-generated trusted verdict reaching a decision path | `VerificationServiceTest` — five contradictory advisories produce byte-identical decisions |
+| 2 | No treatment of missing evidence as trusted | `DecisionContract` refusals, run against a permissive pipeline that must fail all of them |
+| 3 | Challenge bound into the report | `IntegrityGuard` (client, PR #18) and `ChallengeContract` (server) |
+| 4 | Decision bound to the challenge it answers | `Decision.challenge` / `.purpose`, asserted in `VerificationServiceTest` |
+| 5 | Sensitive actions need an action-bound decision | `ChallengePurpose.satisfies`, plus a mutant that must die |
+| 6 | A client cannot extend backend freshness, only shorten it | `windowFor` uses `coerceAtMost`; extend, shorten and negative cases all tested |
+| 7 | `tsc --noEmit` over the TypeScript contract | **Not enforced.** The bridge is unbuilt; do not describe it as verified |
+
+Items 1–6 are additionally covered by `tools/mutate-backend.py`, which breaks each guard in
+turn and requires every mutant to be caught. That job runs on every commit and refuses to
+start unless the suite is green first — otherwise a broken test command kills every mutant and
+reports a perfect score.
+
 ## Play Integrity
 
 - **Standard requests** for routine checks: cheap, low latency, uses a warm token provider.

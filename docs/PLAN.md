@@ -114,7 +114,7 @@ properties, SELinux state, verified-boot state, mount-table anomalies, and nativ
       the next root slice, so the detector's test suite does not depend on another module
       to show it works.
 
-### Phase 3a — Native walking skeleton *(2–3 days)* — **do this before any detection code**
+### Phase 3a — Native walking skeleton *(2–3 days)* — **DONE**
 
 > **Status:** implemented. First CI runs with the NDK produced the shipped sizes below —
 > arm64-v8a 219 KB, armeabi-v7a 125 KB, x86_64 207 KB, against a 256 KB budget. Almost all
@@ -176,7 +176,7 @@ They are SDK version strings, not secrets, and an attacker reads them out of the
 anyway. Without them a mismatch cannot be told apart from a dependency-skew bug in the
 host's build, which is the likeliest cause by far.
 
-### Phase 3b — Hooking & instrumentation detection *(2–3 weeks, hardest phase)*
+### Phase 3b — Hooking & instrumentation detection *(2–3 weeks, hardest phase)* — **IN PROGRESS**
 
 Start with **one** capability carried all the way through — signal, clean fixture, positive
 fixture, known bypass, CI, shadow mode — before adding a second. The catalog lists eighteen
@@ -222,7 +222,7 @@ zygote).
 - **Exit:** AVD, Genymotion, redroid and a Parallel-Space-style clone all detected; work
   profile and legitimate multi-user do **not** trigger `VIRT_*`.
 
-### Phase 7 — Attestation & server verification *(1.5 weeks)*
+### Phase 7 — Attestation & server verification *(1.5 weeks)* — **IN PROGRESS**
 - Play Integrity is requested **by the host app, not by this SDK**: the request is a
   network round trip, and ADR-0006 keeps all networking with the app. The `ATT_*` signals
   stay in the vocabulary as `SRV` — produced by the backend from the verified token, and
@@ -232,6 +232,17 @@ zygote).
 - `sample-backend`: nonce issuance, token verification, decision endpoint, and a worked
   example of combining SDK evidence with Play Integrity verdicts.
 - **Exit:** end-to-end demo — tampered client's report is rejected server-side.
+
+> **Done ahead of order** (PRs #20, #21), because the client half of ADR-0006 needed a
+> counterpart to be worth anything: challenge issuance and single-use redemption bound to a
+> session and purpose; the decision pipeline with `TRUSTED / COMPROMISED / UNAVAILABLE /
+> INSUFFICIENT_EVIDENCE` and `ALLOW / STEP_UP / REVIEW / DENY`; server-authoritative freshness;
+> Play Integrity behind a verifier interface with a fail-closed guard so a fixture cannot ship.
+> ADR-0007 came out of it.
+>
+> **Left in this phase:** live Play Integrity verification against Google (blocked on a project
+> and service credentials — nothing in the repo verifies a real token today), report signing,
+> and parsing the canonical wire form server-side.
 
 ### Phase 8 — Self-protection & hardening *(1 week)*
 See [ANTI_TAMPER.md](ANTI_TAMPER.md). R8 rules, string/constant obfuscation, control-flow
