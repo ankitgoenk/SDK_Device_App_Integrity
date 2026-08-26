@@ -70,15 +70,48 @@ class AntiVacuityTest {
     }
 
     @Test
-    fun `the contract is not empty, so the two checks above cannot pass by vacuity`() {
+    fun `every decision refusal fails against a pipeline that allows everything`() {
+        // The standing requirement, at the pipeline level: a verifier that returns "valid" for
+        // everything must not be able to make this suite green. The permissive pipeline below
+        // is that verifier taken to its conclusion — it skips the pipeline entirely and just
+        // says yes — and every refusal in the contract must catch it.
+        val permissive = DecisionHarness {
+            Decision(
+                action = Action.ALLOW,
+                deviceState = DeviceState.TRUSTED,
+                reason = DecisionReason.OK,
+                challenge = "whatever",
+                purpose = ChallengePurpose.SENSITIVE_ACTION,
+                expiresAtMillis = Long.MAX_VALUE
+            )
+        }
+        val survivors = DecisionContract.refusals.filter { check ->
+            runCatching { check.run(permissive) }.isSuccess
+        }
+        assertThat(survivors.map { it.name }).isEmpty()
+    }
+
+    @Test
+    fun `the real pipeline satisfies every decision refusal`() {
+        val harness = realHarness()
+        val failures = DecisionContract.refusals.mapNotNull { check ->
+            runCatching { check.run(harness) }.exceptionOrNull()?.let { "${check.name}: ${it.message}" }
+        }
+        assertThat(failures).isEmpty()
+    }
+
+    @Test
+    fun `the contracts are not empty, so the checks above cannot pass by vacuity`() {
         // Guards the guard: filtering an empty list also yields an empty list.
         assertThat(ChallengeContract.rejections.size).isAtLeast(MIN_REJECTIONS)
         assertThat(ChallengeContract.acceptances.size).isAtLeast(MIN_ACCEPTANCES)
+        assertThat(DecisionContract.refusals.size).isAtLeast(MIN_REFUSALS)
     }
 
     private companion object {
         const val TTL = 120_000L
         const val MIN_REJECTIONS = 8
         const val MIN_ACCEPTANCES = 4
+        const val MIN_REFUSALS = 8
     }
 }
