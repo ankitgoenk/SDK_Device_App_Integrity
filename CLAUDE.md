@@ -1,14 +1,23 @@
 # Repository guide
 
 Android SDK for device- and app-integrity detection (root, Frida/hooking, tampering,
-hostile co-installed apps). **Currently design-phase: documentation only, no code yet.**
+hostile co-installed apps), plus the backend half that turns its evidence into a decision.
+
+**Status:** phases 0–1 complete; 2, 3 and 7 in progress. Twelve modules, a shipped native
+core, and a backend challenge-and-decision pipeline. Seven device detections are live against
+a catalogue of 68 — the other seven `SignalId`s in code are `META_*` (the SDK reporting on
+itself) and `ATT_*` (server-side vocabulary), so "14 implemented" from the catalogue gate is
+not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the current count.
 
 ## Where things are
 
 - `docs/PLAN.md` — phased plan of action; the source of truth for what to build next
 - `docs/DETECTION_CATALOG.md` — every signal; **any new `SignalId` must be added here**
 - `docs/ARCHITECTURE.md` — module layout and execution model; follow it when scaffolding
-- `docs/adr/` — decisions that should not be relitigated without a new ADR
+- `docs/SERVER_VERIFICATION.md` — the backend half: challenge lifecycle, decision pipeline
+- `docs/adr/` — decisions that should not be relitigated without a new ADR. ADR-0006 is the
+  integration contract; **ADR-0007 is the asymmetric-trust rule** that governs the backend
+- `tools/` — the CI gates. Several of them test the other gates; see `mutate-backend.py`
 
 ## Hard rules when writing code here
 
@@ -26,8 +35,22 @@ hostile co-installed apps). **Currently design-phase: documentation only, no cod
    absence of evidence, the absence of a server response, or a locally computed verdict as
    proof that the device is trusted.** The SDK says what it observed; the backend decides.
    See ADR-0006.
+9. **Evidence can incriminate. It can never exonerate.** A detector that finds nothing emits
+   no signal, so a clean device and a client suppressing everything send identical reports.
+   Server-side, signals may only move a decision away from trust; `TRUSTED` comes solely from
+   the authenticated anchor. Never add a path where something in the report raises trust —
+   including a client-supplied `coverage`. See ADR-0007.
+10. A gate that cannot fail is worse than no gate. Anything asserting a security property
+   ships with proof it rejects the broken case: a positive control, a deliberately broken
+   implementation the suite must catch, or a mutant. This has caught more real defects here
+   than code review has.
 
 ## Conventions
 
 Kotlin official style, ktlint + detekt, conventional commits, one signal family per PR.
 See `CONTRIBUTING.md` for the detector definition-of-done.
+
+**Keep these docs current in the same PR as the change.** `docs/PLAN.md` phase markers,
+`docs/adr/0006`'s CI-enforcement checklist and the module tables in `README.md` and
+`docs/ARCHITECTURE.md` have all gone stale before; `tools/check-doc-drift.py` now fails the
+build for the module tables, and the rest is on you.

@@ -1,6 +1,9 @@
 # ADR-0006: The app/SDK/backend integration contract
 
-**Status:** proposed. No implementation exists.
+**Status:** accepted. Implemented across PRs #18 (SDK side), #20 (challenge lifecycle)
+and #21 (decision pipeline). ADR-0007 refines §5's scoring authority: evidence may only
+move a decision away from trust. Enforcement status for the checklist below is tracked in
+`docs/SERVER_VERIFICATION.md`, not here — this record is not edited after acceptance.
 
 ## Context
 

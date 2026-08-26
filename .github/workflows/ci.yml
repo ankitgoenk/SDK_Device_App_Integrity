@@ -14,7 +14,7 @@ env:
 
 jobs:
   catalog:
-    name: Signal catalog consistency
+    name: Docs and catalog consistency
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +24,10 @@ jobs:
       # Every SignalId in code must have a documented technique, weight, FP analysis
       # and known bypass in docs/DETECTION_CATALOG.md.
       - run: tools/check-signal-catalog.py
+
+      # The module tables in README and ARCHITECTURE must match settings.gradle.kts. Both
+      # silently omitted integrity-model for a whole PR after it was added.
+      - run: tools/check-doc-drift.py
 
   quality:
     name: Static analysis

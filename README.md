@@ -110,7 +110,7 @@ you set `integrity.enableNative=true`.
 | `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
 | `integrity-testing` | Fakes and fixtures for detector tests |
 | `sample-app` | Renders a live report |
-| `sample-backend` | Nonce issuance and report verification (phase 7) |
+| `sample-backend` | Challenge issuance, Play Integrity verification and the decision pipeline |
 
 ## Licence
 
