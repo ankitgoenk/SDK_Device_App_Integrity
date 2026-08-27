@@ -31,6 +31,11 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
 4. Never declare `QUERY_ALL_PACKAGES` (see ADR-0004).
 5. The SDK performs no network IO (ADR-0003) and never terminates the host process.
 6. New signals ship at `INFORMATIONAL` weight until shadow-mode data justifies promotion.
+   Two gates block the first non-zero weight, and neither is the promoter's to waive: report
+   signing must be shipped and verified, and the reports must be joinable to authoritative
+   fraud outcomes. Promote on **precision at the operating point**, never on hit rate. The
+   join key comes from the host — adding a device identifier to the report to make the join
+   easier breaks hard rule 3. See "Weight promotion" at the end of `docs/PLAN.md` §1.
 7. `integrity-core` takes no third-party runtime dependency beyond coroutines and
    `androidx.annotation`.
 8. **The client may report evidence and consume a server decision. It must never treat the
