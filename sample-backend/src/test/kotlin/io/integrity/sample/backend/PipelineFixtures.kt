@@ -13,11 +13,9 @@ import io.integrity.core.Weight
 /**
  * Deterministic fixtures for the verification pipeline.
  *
- * **These verify nothing about Google.** Every attestation outcome below is fabricated. They
- * establish binding, freshness, replay protection, requestHash/challenge relationships and
- * server-side scoring; they establish precisely nothing about whether a real Play Integrity
- * token is genuine, because no code here parses or checks a real one. Anything claiming
- * otherwise would be the overclaim this project keeps catching itself in.
+ * These establish binding, freshness, replay protection and server-side scoring. They
+ * establish nothing about device attestation, which is no longer this project's to perform
+ * (ADR-0008) — there is no attestation fixture here to overclaim with any more.
  */
 
 internal val ROOT_SU = SignalId("ROOT_SU_BINARY")
@@ -32,8 +30,8 @@ internal val ENV_ADB = SignalId("ENV_ADB_ENABLED")
  * signal only once shadow data justifies it (hard rule 6). One consequence deserves stating
  * plainly: under the default policy no signal can produce COMPROMISED, because `score()`
  * filters to promoted signals before any escalation runs. A backend that took `balanced()`
- * and relied on signal scoring would trust a rooted device. The scoring policy is the
- * server's to set, and this is what setting it looks like.
+ * would find nothing incriminating on a rooted device. The scoring policy is the server's to
+ * set, and this is what setting it looks like.
  */
 internal fun serverPolicy(): Policy = Policy.balanced()
     .withWeight(ROOT_SU, Weight.HIGH)
@@ -57,8 +55,25 @@ internal fun cleanSignals(): List<Signal> = emptyList()
 internal fun inconclusiveSignals(): List<Signal> =
     listOf(ROOT_SU, HOOK_FRIDA).map { signal(it, Confidence.INCONCLUSIVE) }
 
-/** Evidence against interest: a client would not invent these. */
+/** Evidence against interest: a client would not invent these. Scores COMPROMISED. */
 internal fun incriminatingSignals(): List<Signal> = listOf(signal(HOOK_FRIDA, Confidence.CONFIRMED, Category.HOOKING))
+
+/**
+ * Evidence that reaches SUSPICIOUS but not COMPROMISED: two confirmed root artefacts, no
+ * hooking, so no escalation rule fires and the noisy-OR lands at 50 against a 40/75 band.
+ *
+ * This exists because `tools/mutate-backend.py` proved it had to. Deleting the `SUSPICIOUS`
+ * half of the incrimination predicate changed no test result — the branch was live and
+ * unexercised, and with attestation gone (ADR-0008) that predicate is the only thing in the
+ * pipeline that can produce a finding at all.
+ */
+internal fun suspiciousSignals(): List<Signal> = listOf(
+    signal(ROOT_SU, Confidence.CONFIRMED, Category.ROOT),
+    signal(ROOT_MAGISK, Confidence.CONFIRMED, Category.ROOT)
+)
+
+/** One rung below: a single confirmed root artefact scores 25, under the 40 bar. */
+internal fun lowRiskSignals(): List<Signal> = listOf(signal(ROOT_SU, Confidence.CONFIRMED, Category.ROOT))
 
 internal fun report(
     challenge: String?,
@@ -75,50 +90,31 @@ internal fun report(
     clientAdvisory = advisory
 )
 
-/** A verifier that answers exactly what a test tells it to. Never talks to Google. */
-internal class ScriptedVerifier(private val outcome: (String) -> AttestationOutcome) :
-    PlayIntegrityVerifier,
-    NotForProduction {
-    override fun verify(token: String): AttestationOutcome = outcome(token)
-}
-
-/** The happy-path verifier: token is the challenge, echoed back as a matching requestHash. */
-internal fun verifierEchoing(challengeOf: (String) -> String = { it }) = ScriptedVerifier { token ->
-    AttestationOutcome.Verified(
-        appRecognised = true,
-        deviceRecognised = true,
-        requestHash = RequestHash.of(challengeOf(token))
-    )
-}
-
 internal fun service(
     clock: ServerClock,
-    verifier: PlayIntegrityVerifier = verifierEchoing(),
     store: ChallengeStore = InMemoryChallengeStore(clock),
     policy: Policy = serverPolicy(),
     decisionPolicy: DecisionPolicy = DecisionPolicy()
 ) = VerificationService(
     challenges = store,
-    verifier = verifier,
     scorer = RiskScorer(policy),
     decisionPolicy = decisionPolicy,
     clock = clock
 )
 
-/** Convenience: mint a challenge, submit a report answering it, return the decision. */
+/** Convenience: mint a challenge, submit a report answering it, return the finding. */
 internal fun VerificationService.submit(
     challenge: Challenge,
     signals: List<Signal> = cleanSignals(),
     advisory: ClientAdvisory? = null,
-    token: String? = challenge.value,
     requestedMaxAgeMillis: Long? = null,
     sessionId: String = challenge.sessionId,
-    purpose: ChallengePurpose = challenge.purpose
+    purpose: ChallengePurpose = challenge.purpose,
+    reportChallenge: String? = challenge.value
 ): Decision = verify(
     ReportSubmission(
         sessionId = sessionId,
-        report = report(challenge.value, signals, advisory = advisory),
-        playIntegrityToken = token,
+        report = report(reportChallenge, signals, advisory = advisory),
         requestedMaxAgeMillis = requestedMaxAgeMillis
     ),
     purpose

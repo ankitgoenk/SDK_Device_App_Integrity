@@ -28,3 +28,6 @@ What becomes easier, what becomes harder, what we accept.
 | [0003](0003-no-network-in-sdk.md) | The SDK performs no network IO | Accepted |
 | [0004](0004-package-visibility.md) | Curated `<queries>` instead of `QUERY_ALL_PACKAGES` | Accepted |
 | [0005](0005-native-failure-model.md) | Native failure model: status codes, validated reads, no exceptions | Accepted |
+| [0006](0006-integration-contract.md) | The app/SDK/backend integration contract | Accepted; partly superseded by 0008 |
+| [0007](0007-asymmetric-trust.md) | Evidence can incriminate, never exonerate | Accepted; partly superseded by 0008 |
+| [0008](0008-attestation-out-of-scope.md) | Attestation leaves our scope; the backend becomes an evidence service | Accepted |

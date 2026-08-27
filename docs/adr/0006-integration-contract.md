@@ -4,6 +4,8 @@
 and #21 (decision pipeline). ADR-0007 refines §5's scoring authority: evidence may only
 move a decision away from trust. Enforcement status for the checklist below is tracked in
 `docs/SERVER_VERIFICATION.md`, not here — this record is not edited after acceptance.
+ADR-0008 supersedes the "Trust boundary" section and Resolved 3: attestation is no longer
+performed by this project, so the anchor those parts rest on is gone. The rest stands.
 
 ## Context
 

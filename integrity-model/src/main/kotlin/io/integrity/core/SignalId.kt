@@ -73,7 +73,14 @@ public value class SignalId(public val value: String) {
         /** A classes*.dex digest does not match the build-time baseline. */
         public val APP_DEX_DIGEST_MISMATCH: SignalId = SignalId("APP_DEX_DIGEST_MISMATCH")
 
-        /** Play Integrity does not recognise this app: direct repackaging evidence. */
+        /**
+         * An attestation service does not recognise this app: direct repackaging evidence.
+         *
+         * Server-side vocabulary, and nothing in this project emits it — ADR-0008 put
+         * attestation outside our scope. It stays because the integrator's own attestation
+         * *is* in scope for them: this is the `SignalId` under which they feed that verdict
+         * into [RiskScorer], where it escalates decisively.
+         */
         public val ATT_APP_NOT_RECOGNISED: SignalId = SignalId("ATT_APP_NOT_RECOGNISED")
     }
 }

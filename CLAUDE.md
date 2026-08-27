@@ -16,7 +16,9 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
 - `docs/ARCHITECTURE.md` — module layout and execution model; follow it when scaffolding
 - `docs/SERVER_VERIFICATION.md` — the backend half: challenge lifecycle, decision pipeline
 - `docs/adr/` — decisions that should not be relitigated without a new ADR. ADR-0006 is the
-  integration contract; **ADR-0007 is the asymmetric-trust rule** that governs the backend
+  integration contract; **ADR-0007 is the asymmetric-trust rule** that governs the backend;
+  **ADR-0008 puts attestation out of scope**, which is why the backend has no `TRUSTED` state
+  and emits no access action
 - `tools/` — the CI gates. Several of them test the other gates; see `mutate-backend.py`
 
 ## Hard rules when writing code here
@@ -37,9 +39,11 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
    See ADR-0006.
 9. **Evidence can incriminate. It can never exonerate.** A detector that finds nothing emits
    no signal, so a clean device and a client suppressing everything send identical reports.
-   Server-side, signals may only move a decision away from trust; `TRUSTED` comes solely from
-   the authenticated anchor. Never add a path where something in the report raises trust —
-   including a client-supplied `coverage`. See ADR-0007.
+   Server-side, signals may only move a decision away from trust. Never add a path where
+   something in the report raises trust — including a client-supplied `coverage`. See ADR-0007.
+   This project performs **no attestation** and its backend has no `TRUSTED` state and no
+   access action: it grades evidence, the integrator decides. Do not add an `ALLOW` back
+   without a new ADR — see ADR-0008.
 10. A gate that cannot fail is worse than no gate. Anything asserting a security property
    ships with proof it rejects the broken case: a positive control, a deliberately broken
    implementation the suite must catch, or a mutant. This has caught more real defects here

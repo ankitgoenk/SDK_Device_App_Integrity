@@ -46,7 +46,7 @@
 | `integrity-baseline-plugin` | gradle-plugin | Build-time baseline generation (dex/lib digests, signing pins, string obfuscation keys) |
 | `integrity-testing` | android-library (debug) | Fakes, fixtures, a `ScriptedDetector` for host-app testing |
 | `sample-app` | application | Live report UI, forced-signal playground |
-| `sample-backend` | jvm | Challenge issuance and single-use redemption, Play Integrity verifier interface, decision policy and freshness. Consumes `integrity-model`. See `docs/SERVER_VERIFICATION.md` |
+| `sample-backend` | jvm | Challenge issuance and single-use redemption, server-side re-scoring, and decision freshness. Performs no attestation and emits no access decision (ADR-0008). Consumes `integrity-model`. See `docs/SERVER_VERIFICATION.md` |
 
 **Dependency rule:** detectors depend on `integrity-core`; `integrity-core` never depends on
 a detector. `integrity-model` sits below `integrity-core` and depends on nothing but the

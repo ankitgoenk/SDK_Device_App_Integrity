@@ -7,8 +7,9 @@ The client can be patched. The backend cannot. Everything that matters is decide
 1. The backend never trusts a client verdict — it re-scores the raw signals itself.
 2. Every report is bound to a **server-issued nonce** and is single-use.
 3. A **missing, stale, malformed or unsigned** report is a risk signal, not a neutral one.
-4. Play Integrity tokens are verified **server-side only**, against Google's keys.
-5. Decisions are logged with `reportId` so support can explain an outcome later.
+4. This service performs **no device attestation** and never concludes a device is
+   trustworthy — ADR-0008. It grades evidence; the integrator decides access.
+5. Findings are logged with `reportId` so support can explain an outcome later.
 
 ## Protocol
 
@@ -21,20 +22,21 @@ Client                                        Backend
   │      { nonce, expiresAt }                    │
   │                                              │
   │  evaluate(FULL) → report                     │
-  │  Play Integrity token request (nonce-bound)  │
   │                                              │
   │  POST /integrity/report                      │
   │   { canonicalReport, signature, keyId,       │
-  │     nonce, playIntegrityToken }              │
+  │     nonce }                                  │
   │ ─────────────────────────────────────────▶   │  1. nonce valid, unused, unexpired?
   │                                              │  2. signature valid over canonical bytes?
   │                                              │  3. report freshness within skew window?
-  │                                              │  4. verify Play Integrity token w/ Google
-  │                                              │  5. re-score signals under server policy
-  │                                              │  6. cross-check client vs. attestation
-  │  ◀───────────────────────────────────────    │  7. persist + decide
-  │      { decision, ttl, requiredStepUp }       │
+  │                                              │  4. re-score signals under server policy
+  │  ◀───────────────────────────────────────    │  5. persist + return a finding
+  │      { deviceState, reason, ttl }            │
 ```
+
+Attestation is absent from this diagram on purpose (ADR-0008). The integrator runs their own
+Play Integrity flow alongside, on their own nonce, and combines its result with the finding
+above. Neither leg is this service's to perform, and the combination happens on their side.
 
 ### Canonical serialisation
 
@@ -104,15 +106,20 @@ So the report is never a route to trust:
 - Signals are believed when they **incriminate**. A tampered client has no reason to invent
   evidence against itself, so an incriminating signal is credible however it arrived.
 - Signals that merely fail to incriminate establish nothing at all.
-- `TRUSTED` comes only from the authenticated anchor — a Play Integrity token that verifies,
-  for this app, this device, and this challenge.
+- There is no `TRUSTED`. This service holds no authenticated anchor (ADR-0008), so the
+  strongest finding it can reach is `NO_EVIDENCE_OF_COMPROMISE` — an absence, named to resist
+  being skim-read as a pass.
 
-Two consequences worth stating because they read as bugs otherwise:
+Three consequences worth stating because they read as bugs otherwise:
 
-- **An empty report with a verified token is `TRUSTED`.** That is the ordinary clean case, not
-  a gap.
-- **A spotless report with no token is `UNAVAILABLE`, never `TRUSTED`.** No amount of clean
-  client evidence substitutes for attestation.
+- **A spotless report earns `NO_EVIDENCE_OF_COMPROMISE`, and so does a client that suppressed
+  everything.** They are the same bytes. That is the whole reason the ceiling is where it is.
+- **There is no `Action` in the response.** An `ALLOW` this service could emit would be an
+  exoneration by another name. The integrator combines this finding with their own attestation
+  result and decides; that decision does not happen here.
+- **Under the default policy every device comes back `NO_EVIDENCE_OF_COMPROMISE`,** including
+  a rooted one, because hard rule 6 ships every signal at `INFORMATIONAL` and `score()` filters
+  to promoted signals. A deployment must set its own weights or this pipeline says nothing.
 
 The client's `coveragePermille` is consulted nowhere, and the scorer is deliberately called
 with full coverage. Its low-coverage gate exists to stop a thin report reading as clean *on
@@ -132,10 +139,10 @@ as the gate.
 
 | # | Property | Enforced by |
 | --- | --- | --- |
-| 1 | No client-generated trusted verdict reaching a decision path | `VerificationServiceTest` — five contradictory advisories produce byte-identical decisions |
-| 2 | No treatment of missing evidence as trusted | `DecisionContract` refusals, run against a permissive pipeline that must fail all of them |
+| 1 | No client-generated trusted verdict reaching a decision path | `VerificationServiceTest` — five contradictory advisories produce byte-identical findings |
+| 2 | No treatment of missing evidence as trusted | `DecisionContract` refusals, run against a permissive pipeline that must fail all of them. Structurally reinforced: `DeviceState` has no trusted member, and a test pins the enum's shape |
 | 3 | Challenge bound into the report | `IntegrityGuard` (client, PR #18) and `ChallengeContract` (server) |
-| 4 | Decision bound to the challenge it answers | `Decision.challenge` / `.purpose`, asserted in `VerificationServiceTest` |
+| 4 | Finding bound to the challenge it answers | `Decision.challenge` / `.purpose`, asserted in `VerificationServiceTest` |
 | 5 | Sensitive actions need an action-bound decision | `ChallengePurpose.satisfies`, plus a mutant that must die |
 | 6 | A client cannot extend backend freshness, only shorten it | `windowFor` uses `coerceAtMost`; extend, shorten and negative cases all tested |
 | 7 | `tsc --noEmit` over the TypeScript contract | **Not enforced.** The bridge is unbuilt; do not describe it as verified |
@@ -145,7 +152,17 @@ turn and requires every mutant to be caught. That job runs on every commit and r
 start unless the suite is green first — otherwise a broken test command kills every mutant and
 reports a perfect score.
 
-## Play Integrity
+## Play Integrity — guidance for the integrator, not a description of this service
+
+Everything in this section is **outside this project's scope** (ADR-0008). It is kept because
+the integrator running attestation still has to get it right, and this is where the knowledge
+was already written down. Nothing here is implemented in `sample-backend`, and no test in this
+repository establishes any of it.
+
+Note the API split, because it changes what is possible: the flow below assumes **Standard**
+requests with a `requestHash`. A deployment using the **Classic** API binds freshness through
+`IntegrityTokenRequest.setNonce(...)` instead, and the two are not interchangeable — a
+`requestHash` derived from a challenge will never match a Classic token.
 
 - **Standard requests** for routine checks: cheap, low latency, uses a warm token provider.
   Request `prepareIntegrityToken` at app start; call `request(requestHash = sha256(nonce ‖ payloadDigest))`.
@@ -175,7 +192,9 @@ attestation root, or an explicitly higher-friction policy for those devices.
 
 ## Cross-checking client vs. attestation
 
-The most valuable server-side signal is **disagreement**:
+Also integrator-side, and the reason our finding is worth combining with theirs at all: this
+comparison needs both halves, and only the integrator holds both. The most valuable signal is
+**disagreement**:
 
 | Client says | Attestation says | Interpretation |
 | --- | --- | --- |
@@ -190,9 +209,13 @@ public bypass for your app has been published.
 ## Decision service
 
 ```
-score_server = rescore(signals, serverPolicy)          // never trust client score
-score_final  = combine(score_server, attestation, deviceHistory, accountRisk)
+finding      = rescore(signals, serverPolicy)          // this service; never trusts the client
+decision     = combine(finding, attestation, deviceHistory, accountRisk)   // the integrator
 ```
+
+The split is the point. `finding` is all this repository produces, and it can only ever
+accuse. `decision` is where an allow can come from, and it needs an authenticated input that
+this service does not have.
 
 Inputs worth combining server-side that the client cannot see:
 - device/account history and velocity (many accounts per device signature, many devices per account),
