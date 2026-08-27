@@ -112,7 +112,13 @@ never renamed. CI enforces that every `SignalId` in code has an entry here.
 | `VIRT_FOREIGN_PACKAGE_MAPS` | Another package's APK/lib paths mapped into this process | NAT | H | low | Classic VirtualApp fingerprint |
 | `VIRT_UID_ANOMALY` | Process UID's app-id does not match the package's declared UID, or multiple instances of the package's process exist | NAT | M | med | — |
 
-## 6. Attestation (server-verified)
+## 6. Attestation (server-verified, and not by us)
+
+**This project performs no attestation** — ADR-0008 moved it out of scope, and nothing
+here emits an `ATT_*` signal. The rows below are the vocabulary an integrator uses when
+feeding their *own* Play Integrity verdicts into `RiskScorer`, which is why the weights
+and false-positive notes are still worth keeping. Only `ATT_APP_NOT_RECOGNISED` exists as
+a `SignalId` constant today, because it is the one the scorer names in `DECISIVE_SIGNALS`.
 
 | SignalId | Source | Layer | Weight | FP | Notes |
 | --- | --- | --- | --- | --- | --- |

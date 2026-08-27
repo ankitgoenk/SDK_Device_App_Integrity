@@ -98,7 +98,8 @@ class Signal(
     val detectedAtMillis: Long,
 )
 
-enum class Verdict { TRUSTED, LOW_RISK, SUSPICIOUS, COMPROMISED, UNKNOWN }
+enum class Verdict { NO_EVIDENCE_OF_COMPROMISE, LOW_RISK, SUSPICIOUS, COMPROMISED, UNKNOWN }
+// No rung means "trusted": ADR-0009. The bottom one is an absence, not a pass.
 
 class IntegrityReport(
     val verdict: Verdict,

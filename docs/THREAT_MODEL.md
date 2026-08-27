@@ -57,7 +57,7 @@ evidence.
 - **Screen capture / remote control:** MediaProjection-based streaming, TeamViewer-style RAT.
 
 ### 5. Attacks on the SDK itself
-- Patch `Verdict` construction to always return `TRUSTED`.
+- Patch `Verdict` construction to always return the bottom rung.
 - Hook the public API (`evaluate`) and return a cached clean report.
 - Strip the SDK's initialisation call from the host app entirely.
 - Replace the native `.so` with a stub, or hook `System.loadLibrary`.
@@ -74,8 +74,8 @@ bad one.
 | --- | --- |
 | SDK ↔ host app | Same process, same trust. The SDK cannot defend against a hostile host |
 | SDK ↔ OS | Untrusted on rooted devices. Everything the OS reports may be spoofed |
-| Client ↔ backend | Backend trusts nothing from the client except a valid Play Integrity token and a signed report bound to a server nonce |
-| Backend ↔ Play Integrity | Trusted, verified server-side against Google's keys. Never verify the token on-device |
+| Client ↔ backend | Backend trusts nothing from the client. A signed report bound to a server nonce proves freshness and origin, never that its contents are true |
+| Backend ↔ attestation | Out of this project's scope (ADR-0008). The integrator runs their own attestation and combines its result with our evidence finding. Wherever it runs, never verify a token on-device |
 
 ## What this SDK does **not** promise
 

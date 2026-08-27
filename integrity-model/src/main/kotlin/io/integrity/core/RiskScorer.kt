@@ -37,7 +37,8 @@ public class RiskScorer(private val policy: Policy) {
         val combined = combine(categoryScores)
 
         if (coverage < policy.minimumCoverage) {
-            // Too little evidence for "clean" to mean anything. Never TRUSTED by default.
+            // Too little evidence for "clean" to mean anything. UNKNOWN outranks the
+            // bottom rung deliberately: "we could not look" must not read like "we looked".
             return ScoringResult(Verdict.UNKNOWN, combined, categoryScores)
         }
 
@@ -78,7 +79,7 @@ public class RiskScorer(private val policy: Policy) {
         score >= policy.compromisedThreshold -> Verdict.COMPROMISED
         score >= policy.suspiciousThreshold -> Verdict.SUSPICIOUS
         score >= policy.lowRiskThreshold -> Verdict.LOW_RISK
-        else -> Verdict.TRUSTED
+        else -> Verdict.NO_EVIDENCE_OF_COMPROMISE
     }
 
     private fun escalate(base: Verdict, signals: List<Signal>, categoryScores: Map<Category, Int>): Verdict {
@@ -126,7 +127,7 @@ public class RiskScorer(private val policy: Policy) {
         /** Ascending severity. UNKNOWN sits at the bottom: it is decided by coverage. */
         val SEVERITY_LADDER = listOf(
             Verdict.UNKNOWN,
-            Verdict.TRUSTED,
+            Verdict.NO_EVIDENCE_OF_COMPROMISE,
             Verdict.LOW_RISK,
             Verdict.SUSPICIOUS,
             Verdict.COMPROMISED

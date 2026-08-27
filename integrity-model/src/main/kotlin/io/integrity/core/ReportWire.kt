@@ -32,7 +32,16 @@ package io.integrity.core
 public object ReportWire {
 
     /** Bumped when the canonical form changes in a way that would alter existing bytes. */
-    public const val WIRE_VERSION: Int = 1
+    /**
+     * Bumped to 2 by ADR-0009, which renamed `Verdict.TRUSTED`.
+     *
+     * The field it changes lives under `clientAdvisory`, which no decision reads — so this
+     * is not a structural break. It is still a bump, because the *value domain* of a
+     * serialised field changed: without one, two reports carrying different vocabularies
+     * would claim the same version, and anything storing reports could not tell which
+     * enum a historical `"verdict"` belonged to.
+     */
+    public const val WIRE_VERSION: Int = 2
 
     private const val PER_MILLE = 1000
     private val HEX_DIGITS = "0123456789abcdef".toCharArray()

@@ -130,7 +130,7 @@ Do **not** add `-keep class io.integrity.** { *; }` — that defeats the SDK's o
 ```kotlin
 when (val r = IntegrityGuard.currentReport()) {
     else -> when (r.verdict) {
-        Verdict.TRUSTED, Verdict.LOW_RISK -> Unit
+        Verdict.NO_EVIDENCE_OF_COMPROMISE, Verdict.LOW_RISK -> Unit
         Verdict.SUSPICIOUS -> analytics.flag(r.reportId)          // observe, don't block
         Verdict.COMPROMISED -> featureFlags.disableSensitive()     // degrade quietly
         Verdict.UNKNOWN -> scheduleRetry()

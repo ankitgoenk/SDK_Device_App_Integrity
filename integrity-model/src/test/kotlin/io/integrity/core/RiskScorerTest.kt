@@ -18,10 +18,26 @@ class RiskScorerTest {
         RiskScorer(policy).score(signals, coverage)
 
     @Test
-    fun `no signals is trusted`() {
+    fun `no verdict in the vocabulary can be read as permission`() {
+        // The client-side twin of the DeviceState shape assertion in VerificationServiceTest.
+        // `TRUSTED` lived here until ADR-0009 and made `if (verdict == TRUSTED) allow()` the
+        // obvious line to write in a host app — a decision taken on the device, from unsigned
+        // local evidence. Naming is the whole defence, so it is pinned rather than trusted to
+        // survive the next person adding a rung.
+        assertThat(Verdict.entries).containsExactly(
+            Verdict.NO_EVIDENCE_OF_COMPROMISE,
+            Verdict.LOW_RISK,
+            Verdict.SUSPICIOUS,
+            Verdict.COMPROMISED,
+            Verdict.UNKNOWN
+        )
+    }
+
+    @Test
+    fun `no signals yields no evidence of compromise, which is not a pass`() {
         val result = score(emptyList())
 
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
         assertThat(result.riskScore).isEqualTo(0)
     }
 
@@ -40,7 +56,7 @@ class RiskScorerTest {
         val result = score(listOf(Signal(ROOT_A, Category.ROOT, Confidence.INCONCLUSIVE)))
 
         assertThat(result.riskScore).isEqualTo(0)
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
     }
 
     @Test
@@ -131,7 +147,7 @@ class RiskScorerTest {
         )
 
         assertThat(result.riskScore).isEqualTo(0)
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
     }
 
     @Test
@@ -144,7 +160,7 @@ class RiskScorerTest {
     }
 
     @Test
-    fun `low coverage yields unknown rather than trusted`() {
+    fun `low coverage yields unknown rather than a clean-looking verdict`() {
         val result = score(emptyList(), coverage = 0.1f)
 
         assertThat(result.verdict).isEqualTo(Verdict.UNKNOWN)
@@ -167,7 +183,7 @@ class RiskScorerTest {
             policy = policy().withDisabled(HOOK_A)
         )
 
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
         assertThat(result.riskScore).isEqualTo(0)
     }
 
@@ -177,7 +193,7 @@ class RiskScorerTest {
         val result = score(listOf(Signal(unknown, Category.ROOT, Confidence.CONFIRMED)))
 
         assertThat(result.riskScore).isEqualTo(0)
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
     }
 
     @Test
@@ -197,7 +213,7 @@ class RiskScorerTest {
         val lenient = score(signals, policy = policy().withThresholds(lowRisk = 99))
         val harsh = score(signals, policy = policy().withThresholds(lowRisk = 1, suspicious = 2))
 
-        assertThat(lenient.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(lenient.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
         assertThat(harsh.verdict).isEqualTo(Verdict.SUSPICIOUS)
     }
 
@@ -212,7 +228,7 @@ class RiskScorerTest {
             policy = unpromoted
         )
 
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
         assertThat(result.riskScore).isEqualTo(0)
     }
 
@@ -235,7 +251,7 @@ class RiskScorerTest {
             policy = Policy.balanced()
         )
 
-        assertThat(result.verdict).isEqualTo(Verdict.TRUSTED)
+        assertThat(result.verdict).isEqualTo(Verdict.NO_EVIDENCE_OF_COMPROMISE)
     }
 
     @Test

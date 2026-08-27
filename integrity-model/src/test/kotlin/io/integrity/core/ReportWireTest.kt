@@ -16,7 +16,7 @@ class ReportWireTest {
     private fun report(
         coverage: Float = 0.83f,
         signals: List<Signal> = emptyList(),
-        verdict: Verdict = Verdict.TRUSTED,
+        verdict: Verdict = Verdict.NO_EVIDENCE_OF_COMPROMISE,
         riskScore: Int = 0,
         categoryScores: Map<Category, Int> = emptyMap(),
         challenge: String? = null
@@ -134,7 +134,7 @@ class ReportWireTest {
      */
     @Test
     fun theClientVerdictIsNotATopLevelField() {
-        val json = ReportWire.canonicalJson(report(verdict = Verdict.TRUSTED, riskScore = 17))
+        val json = ReportWire.canonicalJson(report(verdict = Verdict.NO_EVIDENCE_OF_COMPROMISE, riskScore = 17))
 
         assertThat(topLevelKeys(json)).containsExactly(
             "challenge", "clientAdvisory", "coveragePermille", "depth",
@@ -144,7 +144,7 @@ class ReportWireTest {
         assertThat(topLevelKeys(json)).doesNotContain("riskScore")
         // Still present, just fenced where misuse reads as wrong.
         assertThat(json).contains("\"clientAdvisory\":{")
-        assertThat(json).contains("\"verdict\":\"TRUSTED\"")
+        assertThat(json).contains("\"verdict\":\"NO_EVIDENCE_OF_COMPROMISE\"")
     }
 
     /** Hard rule 2, carried across the boundary: "could not check" must reach the backend. */

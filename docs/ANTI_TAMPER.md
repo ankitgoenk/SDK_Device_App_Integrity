@@ -98,7 +98,7 @@ per attack, the *time-to-bypass* and *number of independent changes required*:
 | --- | --- | --- |
 | Public Frida anti-root script | JVM root checks | ≥ 3 (JVM, native, attestation) |
 | Delete the `.so` | Native layer | Caught by `META_NATIVE_UNAVAILABLE` |
-| Patch scoring to return `TRUSTED` | Client verdict | Caught server-side (re-scoring) |
+| Patch scoring to return the bottom rung | Client verdict | Caught server-side (re-scoring) |
 | Repackage + re-sign | Everything | Caught by signature, dex digest, and Play Integrity |
 | Strip the `evaluate()` call | Integration | Caught by "no report" server-side rule |
 | Replay a captured clean payload | Transport | Caught by nonce + freshness |

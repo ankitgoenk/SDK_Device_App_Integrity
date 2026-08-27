@@ -55,48 +55,41 @@ MUTANTS = [
      "const val DEFAULT_TTL_MILLIS: Long = 120_000L",
      "const val DEFAULT_TTL_MILLIS: Long = 1_800_000L"),
 
-    # --- decision pipeline ---
-    (SERVICE, "incriminating signals ignored",
-     "            signalsIncriminate ->", "            false ->"),
-    (SERVICE, "unreachable attestation becomes trust",
-     "is AttestationOutcome.Unavailable ->\n                    DeviceState.UNAVAILABLE",
-     "is AttestationOutcome.Unavailable ->\n                    DeviceState.TRUSTED"),
-    (SERVICE, "invalid attestation accepted",
-     "is AttestationOutcome.Invalid ->\n                    DeviceState.COMPROMISED",
-     "is AttestationOutcome.Invalid ->\n                    DeviceState.TRUSTED"),
-    (SERVICE, "requestHash binding removed",
-     "!RequestHash.matches(RequestHash.of(challenge.value), attestation.requestHash) ->",
-     "false ->"),
-    (SERVICE, "unrecognised app accepted",
-     "!attestation.appRecognised -> DeviceState.COMPROMISED to DecisionReason.APP_NOT_RECOGNISED",
-     "false -> DeviceState.COMPROMISED to DecisionReason.APP_NOT_RECOGNISED"),
-    (SERVICE, "unrecognised device accepted",
-     "!attestation.deviceRecognised ->", "false ->"),
     (STORE, "single use rewritten as a non-atomic read then write",
      "!entry.spent.compareAndSet(false, true) -> RedemptionFailure.ALREADY_REDEEMED",
      "!entry.spent.get().also { entry.spent.set(true) }.let { !it } -> RedemptionFailure.ALREADY_REDEEMED"),
+
+    # --- decision pipeline ---
+    # Six attestation mutants used to live here and went with the code they broke (ADR-0008).
+    # The count dropping from 24 to 19 is not a weakened gate; it is a smaller pipeline. What
+    # matters is that no *surviving* guard lost its mutant, and the four below are new because
+    # the evidence-only pipeline has failure modes the old one could not have.
+    (SERVICE, "incriminating signals ignored",
+     "return if (signalsIncriminate) {", "return if (false) {"),
+    (SERVICE, "a suspicious verdict is waved through",
+     "scoring.verdict == Verdict.COMPROMISED || scoring.verdict == Verdict.SUSPICIOUS",
+     "scoring.verdict == Verdict.COMPROMISED"),
+    (SERVICE, "a compromised finding is reported as an absence of evidence",
+     "DeviceState.COMPROMISED to DecisionReason.SIGNALS_INDICATE_COMPROMISE",
+     "DeviceState.NO_EVIDENCE_OF_COMPROMISE to DecisionReason.SIGNALS_INDICATE_COMPROMISE"),
+    (SERVICE, "a rejected challenge collapses into an absence of evidence",
+     "                deviceState = DeviceState.INSUFFICIENT_EVIDENCE,",
+     "                deviceState = DeviceState.NO_EVIDENCE_OF_COMPROMISE,"),
     (SERVICE, "client can extend the decision window",
      "return granted.coerceAtMost(requested.coerceAtLeast(0L))",
      "return requested.coerceAtLeast(0L)"),
     (SERVICE, "client coverage claim gates the scoring",
-     "scorer.score(report.signals, coverage = 1.0f)",
-     "scorer.score(report.signals, (report.clientAdvisory?.coveragePermille ?: 0) / 1000f)"),
-    (SERVICE, "production wiring accepts a fixture verifier",
-     "require(verifier !is NotForProduction) {",
-     "require(true) {"),
+     "scorer.score(submission.report.signals, coverage = 1.0f)",
+     "scorer.score(submission.report.signals, "
+     "(submission.report.clientAdvisory?.coveragePermille ?: 0) / 1000f)"),
     (SERVICE, "a rejected challenge still yields a decision window",
      "                expiresAtMillis = clock.nowMillis()\n            )",
      "                expiresAtMillis = clock.nowMillis() + 1_800_000L\n            )"),
 
     # --- decision policy ---
-    (POLICY, "an unmapped device state allows",
-     "return table[state] ?: Action.DENY", "return table[state] ?: Action.ALLOW"),
     (POLICY, "sensitive actions reuse the ordinary window",
      "if (purpose == ChallengePurpose.SENSITIVE_ACTION) sensitiveWindowMillis else ordinaryWindowMillis",
      "ordinaryWindowMillis"),
-    (POLICY, "sensitive policy weakened to allow an unavailable device",
-     "DeviceState.UNAVAILABLE to Action.DENY,",
-     "DeviceState.UNAVAILABLE to Action.ALLOW,"),
 ]
 
 # Baseline first, on unmutated source. Without this the gate is satisfiable by a broken test

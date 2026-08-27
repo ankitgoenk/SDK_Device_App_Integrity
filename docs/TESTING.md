@@ -87,7 +87,7 @@ days:
 1. Bypass root detection with public Frida scripts only.
 2. Bypass with a custom script targeting the SDK's actual implementation.
 3. Strip the native library.
-4. Patch the scoring layer to always produce `TRUSTED`.
+4. Patch the scoring layer to always produce `NO_EVIDENCE_OF_COMPROMISE`.
 5. Repackage and re-sign the sample app.
 6. Replay a captured clean signed payload.
 7. Run the app inside a cloner/virtual space.

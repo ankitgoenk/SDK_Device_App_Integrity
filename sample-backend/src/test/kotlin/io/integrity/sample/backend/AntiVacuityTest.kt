@@ -70,16 +70,20 @@ class AntiVacuityTest {
     }
 
     @Test
-    fun `every decision refusal fails against a pipeline that allows everything`() {
+    fun `every decision refusal fails against a pipeline that finds nothing wrong with anything`() {
         // The standing requirement, at the pipeline level: a verifier that returns "valid" for
         // everything must not be able to make this suite green. The permissive pipeline below
         // is that verifier taken to its conclusion — it skips the pipeline entirely and just
-        // says yes — and every refusal in the contract must catch it.
+        // says nothing is wrong — and every refusal in the contract must catch it.
+        //
+        // This test is why the refusal predicate had to move when TRUSTED and ALLOW were
+        // deleted (ADR-0008). A harness returning the new ceiling state must still fail all
+        // nine; if the predicate had kept naming the departed vocabulary, this would pass
+        // while proving nothing.
         val permissive = DecisionHarness {
             Decision(
-                action = Action.ALLOW,
-                deviceState = DeviceState.TRUSTED,
-                reason = DecisionReason.OK,
+                deviceState = DeviceState.NO_EVIDENCE_OF_COMPROMISE,
+                reason = DecisionReason.NO_SIGNAL_INCRIMINATES,
                 challenge = "whatever",
                 purpose = ChallengePurpose.SENSITIVE_ACTION,
                 expiresAtMillis = Long.MAX_VALUE

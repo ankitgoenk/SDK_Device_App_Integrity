@@ -6,7 +6,7 @@ import java.util.UUID
  * The immutable result of one evaluation.
  *
  * [coverage] is reported separately from [riskScore] and answers "is a clean report
- * meaningful?". A TRUSTED verdict at 35% coverage should be treated as UNKNOWN.
+ * meaningful?". A NO_EVIDENCE_OF_COMPROMISE verdict at 35% coverage means almost nothing ran.
  */
 // Ten constructor parameters, one over detekt's threshold. Suppressed rather than fixed
 // here because the fix worth making is not "fewer parameters": it is grouping verdict,

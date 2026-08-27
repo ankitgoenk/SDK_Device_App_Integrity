@@ -14,11 +14,10 @@ import io.integrity.core.Verdict
  *
  * `coveragePermille` lives *here*, deliberately, and not on [SubmittedReport]. Coverage is a
  * claim about how much of the check surface ran, and the client is exactly the party that
- * benefits from overstating it: a tampered client reporting zero signals and full coverage
- * would otherwise score TRUSTED, because a noisy-OR over an empty signal set is zero risk. The
- * server computes coverage itself from [EvidenceExpectation]. Putting the client's number
- * inside the advisory holder makes it unreachable from the scoring path by construction rather
- * than by anyone remembering.
+ * benefits from overstating it. The server does not recompute coverage either — ADR-0007
+ * settled that it cannot, because a detector that finds nothing emits no signal — so the
+ * number has no honest consumer anywhere. Putting it inside the advisory holder makes it
+ * unreachable from the scoring path by construction rather than by anyone remembering.
  */
 data class ClientAdvisory(val verdict: Verdict, val riskScore: Int, val coveragePermille: Int)
 
@@ -41,9 +40,8 @@ data class SubmittedReport(
 data class ReportSubmission(
     val sessionId: String,
     val report: SubmittedReport,
-    val playIntegrityToken: String?,
     /**
-     * An upper bound the client asks for on the resulting decision's life.
+     * An upper bound the client asks for on the resulting finding's life.
      *
      * Honoured only where it is shorter than the server's window. ADR-0006 §5: a client may
      * shorten backend freshness and must never be able to extend it.
@@ -52,36 +50,45 @@ data class ReportSubmission(
 )
 
 /**
- * What the server concluded about the device, as distinct from what the app may do.
+ * What the evidence supports, which is never "this device is fine".
  *
- * Four states rather than a boolean, because the three non-trusted ones are not the same
- * thing and collapsing them is how absence of evidence becomes permission:
- * [UNAVAILABLE] means we could not tell, [INSUFFICIENT_EVIDENCE] means the client did not
- * send enough to tell, and [COMPROMISED] means we could tell and the answer was bad.
+ * There is no `TRUSTED` here and there is no route to one, because this service holds no
+ * authenticated anchor: ADR-0008 moved Play Integrity out of scope, and ADR-0007 already
+ * established that a report alone cannot exonerate. [NO_EVIDENCE_OF_COMPROMISE] is the
+ * strongest thing this service can say, and it is deliberately awkward to read as a pass —
+ * a clean device and a client suppressing everything produce it identically.
+ *
+ * The caller combines this with whatever authenticated signal it holds of its own. That
+ * combination is the access decision, and it does not happen here.
  */
-enum class DeviceState { TRUSTED, COMPROMISED, UNAVAILABLE, INSUFFICIENT_EVIDENCE }
+enum class DeviceState {
+    /** Evidence arrived and it incriminates. The only positive finding this service makes. */
+    COMPROMISED,
 
-/** What the app may do. Separate vocabulary from [DeviceState], on purpose. */
-enum class Action { ALLOW, STEP_UP, REVIEW, DENY }
+    /** Nothing in what arrived incriminates. Not a clean bill of health; an absence. */
+    NO_EVIDENCE_OF_COMPROMISE,
 
-/** Why a decision came out the way it did. Diagnostics, and the reason CI can assert on. */
-enum class DecisionReason {
-    CHALLENGE_REJECTED,
-    EVIDENCE_INCOMPLETE,
-    ATTESTATION_UNAVAILABLE,
-    ATTESTATION_INVALID,
-    REQUEST_HASH_MISMATCH,
-    APP_NOT_RECOGNISED,
-    DEVICE_NOT_RECOGNISED,
-    SIGNALS_INDICATE_COMPROMISE,
-    OK
+    /** Nothing usable arrived — no valid challenge, so no finding at all. */
+    INSUFFICIENT_EVIDENCE
 }
 
+/** Why a finding came out the way it did. Diagnostics, and the reason CI can assert on. */
+enum class DecisionReason {
+    CHALLENGE_REJECTED,
+    SIGNALS_INDICATE_COMPROMISE,
+    NO_SIGNAL_INCRIMINATES
+}
+
+/**
+ * What the server found, and how long it is willing to stand behind it.
+ *
+ * No action field. This service grades evidence; it does not grant access, and an `ALLOW` it
+ * could emit would be an exoneration by another name — see ADR-0008.
+ */
 data class Decision(
-    val action: Action,
     val deviceState: DeviceState,
     val reason: DecisionReason,
-    /** The challenge this decision answers. Null only when redemption never succeeded. */
+    /** The challenge this finding answers. Null only when redemption never succeeded. */
     val challenge: String?,
     val purpose: ChallengePurpose?,
     val expiresAtMillis: Long

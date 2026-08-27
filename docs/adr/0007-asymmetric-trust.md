@@ -3,6 +3,10 @@
 Date: 2026-08-26
 **Status:** accepted, implemented in PR #21. Rules out the coverage-reconstruction approach
 proposed for that PR, which was never built because it cannot work — see Context.
+ADR-0008 supersedes the first Consequence: Play Integrity is no longer an input at all,
+so nothing is load-bearing on the trusting side and there is no `TRUSTED` to reach. The
+central rule — evidence may only move a decision away from trust — is unchanged and is now
+the whole of what this service does.
 
 Mechanics live in `docs/SERVER_VERIFICATION.md`, "Evidence can incriminate. It can never
 exonerate." This record exists because the decision is load-bearing and a contributor reading

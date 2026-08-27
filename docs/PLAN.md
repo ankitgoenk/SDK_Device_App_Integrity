@@ -21,7 +21,7 @@ These block Phase 1. Answer them, record each as an ADR in [`adr/`](adr/).
 | D3 | Distribution | Maven artifacts (`integrity-core` + optional detector modules), AAR, published to a private Maven first |
 | D4 | Dependency budget | Zero third-party runtime deps in `integrity-core` beyond kotlinx-coroutines and `androidx.annotation` |
 | D5 | Native core | Yes — hooking/memory checks are not credible in Java only. C++17, `arm64-v8a`, `armeabi-v7a`, `x86_64` |
-| D6 | Play Integrity | Optional module; SDK works without it, is far stronger with it |
+| D6 | ~~Play Integrity~~ | **Out of scope (ADR-0008).** The integrator runs their own attestation and combines its result with our evidence finding |
 | D7 | Telemetry | SDK ships **no** network stack. Host provides a `ReportSink`. Removes a whole class of privacy/policy risk |
 | D8 | Package/namespace | Placeholder `io.integrity.*`, artifact group `io.integrity.sdk`. Rename before first release |
 | D9 | Enforcement | SDK never terminates the process. Host decides. Documented "response cookbook" instead |
@@ -222,27 +222,25 @@ zygote).
 - **Exit:** AVD, Genymotion, redroid and a Parallel-Space-style clone all detected; work
   profile and legitimate multi-user do **not** trigger `VIRT_*`.
 
-### Phase 7 — Attestation & server verification *(1.5 weeks)* — **IN PROGRESS**
-- Play Integrity is requested **by the host app, not by this SDK**: the request is a
-  network round trip, and ADR-0006 keeps all networking with the app. The `ATT_*` signals
-  stay in the vocabulary as `SRV` — produced by the backend from the verified token, and
-  never by a detector here.
+### Phase 7 — Server verification *(1.5 weeks)* — **IN PROGRESS**
+- **No attestation.** ADR-0008 removed it from this project's scope: the integrator already
+  runs Play Integrity end to end and combines its result with our finding. The `ATT_*` signals
+  stay in the vocabulary as `SRV` — the identifiers under which an integrator feeds their own
+  attestation verdict into `RiskScorer`, never produced by a detector here.
 - Report signing: HMAC/ECDSA over the canonicalised report + server nonce, key material
   derived in native code; replay and clock-skew protection.
-- `sample-backend`: nonce issuance, token verification, decision endpoint, and a worked
-  example of combining SDK evidence with Play Integrity verdicts.
+- `sample-backend`: nonce issuance, single-use redemption, and server-side re-scoring that
+  reports what the evidence supports.
 - **Exit:** end-to-end demo — tampered client's report is rejected server-side.
 
 > **Done ahead of order** (PRs #20, #21), because the client half of ADR-0006 needed a
 > counterpart to be worth anything: challenge issuance and single-use redemption bound to a
-> session and purpose; the decision pipeline with `TRUSTED / COMPROMISED / UNAVAILABLE /
-> INSUFFICIENT_EVIDENCE` and `ALLOW / STEP_UP / REVIEW / DENY`; server-authoritative freshness;
-> Play Integrity behind a verifier interface with a fail-closed guard so a fixture cannot ship.
-> ADR-0007 came out of it.
+> session and purpose; the evidence pipeline; server-authoritative freshness. ADR-0007 came
+> out of it, and ADR-0008 then reshaped the output vocabulary to
+> `COMPROMISED / NO_EVIDENCE_OF_COMPROMISE / INSUFFICIENT_EVIDENCE` with no access action at
+> all, because with attestation gone there is nothing that could honestly produce one.
 >
-> **Left in this phase:** live Play Integrity verification against Google (blocked on a project
-> and service credentials — nothing in the repo verifies a real token today), report signing,
-> and parsing the canonical wire form server-side.
+> **Left in this phase:** report signing, and parsing the canonical wire form server-side.
 
 ### Phase 8 — Self-protection & hardening *(1 week)*
 See [ANTI_TAMPER.md](ANTI_TAMPER.md). R8 rules, string/constant obfuscation, control-flow
@@ -345,10 +343,9 @@ verified on a real runtime, not merely built.
       a `SignalId` exists in code with no catalog entry)
 
 ### Phase 7–8
-- [ ] Backend verification of the Play Integrity token, mapped to `ATT_*` server-side
 - [ ] Canonical report serialisation (stable, versioned) + signing
 - [ ] Nonce protocol and replay window
-- [ ] `sample-backend` with verification and a decision matrix
+- [ ] `sample-backend` parsing the canonical wire form and verifying report signatures
 - [ ] Consumer R8 rules; obfuscation build step; hardening review
 
 ### Phase 9–11
@@ -366,7 +363,7 @@ verified on a real runtime, not merely built.
 | **False positives lock out real users** | Revenue and support cost; the top risk | Shadow mode first (report, never enforce), per-signal FP analysis, allowlists, staged rollout with a remote kill switch per signal |
 | **Google Play policy rejection** (`QUERY_ALL_PACKAGES`, accessibility scanning) | Cannot ship | Explicit `<queries>` list only; never request `QUERY_ALL_PACKAGES`; document data safety; see PRIVACY doc |
 | **Package-visibility filtering** silently blinds `ENV_*` checks | False negatives read as "clean" | Model visibility as a capability; emit `INCONCLUSIVE`, never "absent → clean" |
-| **Client-side checks bypassed** | Detection value decays | Server-side verification + Play Integrity as the backbone; treat client signals as risk input, not truth |
+| **Client-side checks bypassed** | Detection value decays | Server-side re-scoring; treat client signals as risk input, never as truth. The integrator's attestation is the backbone, and it is theirs (ADR-0008) |
 | **Detector hangs / ANRs** (`/proc` walks, socket probes) | Host app crashes; SDK gets removed | Hard per-detector timeouts, no main-thread IO, cancellation-aware coroutines, crash isolation |
 | **OEM ROM diversity** (Xiaomi, Samsung, Huawei, Transsion) | Unpredictable FPs | Broad device matrix, property-based allowlists, telemetry-driven tuning in shadow mode |
 | **Vendored detection heuristics rot** | Signals go stale | Version signal definitions; quarterly review; remote-tunable weights |

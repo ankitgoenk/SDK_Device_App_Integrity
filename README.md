@@ -32,7 +32,7 @@ host's **backend** — decides what to do with it.
 | [docs/RISK_SCORING.md](docs/RISK_SCORING.md) | How signals become a score and a verdict; policy configuration; FP tuning |
 | [docs/API_DESIGN.md](docs/API_DESIGN.md) | Public Kotlin/Java API surface, data model, lifecycle |
 | [docs/INTEGRATION.md](docs/INTEGRATION.md) | Host-app integration: Gradle, manifest, `<queries>`, R8, response patterns |
-| [docs/SERVER_VERIFICATION.md](docs/SERVER_VERIFICATION.md) | Signed reports, nonces, Play Integrity, backend decisioning |
+| [docs/SERVER_VERIFICATION.md](docs/SERVER_VERIFICATION.md) | Signed reports, nonces, and the backend evidence pipeline |
 | [docs/ANTI_TAMPER.md](docs/ANTI_TAMPER.md) | Protecting the SDK itself from being neutered |
 | [docs/PRIVACY_AND_COMPLIANCE.md](docs/PRIVACY_AND_COMPLIANCE.md) | Play policy, permissions, GDPR/DPDP, data minimisation |
 | [docs/TESTING.md](docs/TESTING.md) | Device matrix, rooted/Frida test rigs, CI, red-team bypass drills |
@@ -46,7 +46,8 @@ host's **backend** — decides what to do with it.
 2. **Never block the UI, never crash the host.** Every detector runs under a time budget in a
    sandboxed executor; a detector that throws or hangs degrades to `INCONCLUSIVE`.
 3. **Client checks are speed bumps; the server is the referee.** Anything that matters is
-   re-decided on the backend against a signed, nonce-bound report plus Play Integrity.
+   re-graded on the backend against a signed, nonce-bound report. The backend reports what
+   the evidence supports; it never concludes a device is trustworthy (ADR-0008).
 4. **False positives are bugs.** A legitimate user on a Chinese OEM ROM with a work profile and
    a screen reader must not be locked out. Every signal ships with an FP analysis.
 5. **Silent by default.** The SDK detects and reports; it never shows UI, never kills the
@@ -110,7 +111,7 @@ you set `integrity.enableNative=true`.
 | `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
 | `integrity-testing` | Fakes and fixtures for detector tests |
 | `sample-app` | Renders a live report |
-| `sample-backend` | Challenge issuance, Play Integrity verification and the decision pipeline |
+| `sample-backend` | Challenge issuance, single-use redemption and the evidence pipeline |
 
 ## Licence
 
