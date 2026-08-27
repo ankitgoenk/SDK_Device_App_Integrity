@@ -26,6 +26,8 @@ These block Phase 1. Answer them, record each as an ADR in [`adr/`](adr/).
 | D8 | Package/namespace | Placeholder `io.integrity.*`, artifact group `io.integrity.sdk`. Rename before first release |
 | D9 | Enforcement | SDK never terminates the process. Host decides. Documented "response cookbook" instead |
 | D10 | Licence & OSS posture | Decide public vs. internal *before* Phase 8 — public source materially weakens self-protection |
+| D11 | Weight promotion | Blocked by two gates: report signing shipped, and a fraud-outcome join identified. See "Weight promotion" at the end of §1 |
+| D12 | Fraud-outcome data | **Open.** Owning team, join key, outcome latency and retention must be recorded before shadow-mode ingestion starts |
 
 ---
 
@@ -268,6 +270,63 @@ the AAR, changelog, migration guide, licence decision, sample app polish, integr
 documentation review.
 - **Exit:** `1.0.0-rc1` consumed by a real host app from the artifact repository.
 
+### Weight promotion — two gates that block it
+
+Hard rule 6 ships every signal at `INFORMATIONAL`, so today no detector can move a verdict on
+its own. Promoting one above zero is the moment this stops being an engineering exercise and
+becomes a fraud-risk decision. Two things must be true first. Neither is negotiable by
+whoever happens to be promoting the signal.
+
+**Gate 1 — report signing must exist before the first non-zero weight.**
+
+Shadow mode may run on unsigned reports, and that is not an oversight. While every weight is
+zero, no decision depends on a report, so nobody has an incentive to forge one; the data is
+trustworthy because it is worthless to fake. That changes the instant a weight goes above
+zero. From then on a stripped SDK posting a syntactically valid empty report earns
+`NO_EVIDENCE_OF_COMPROMISE` — the same finding a healthy device earns — and that is a bypass
+worth building.
+
+So the gate is not "signing comes third in the roadmap", it is a precondition on promotion:
+**no weight may exceed `INFORMATIONAL` until report signing is implemented and verified.**
+
+State its limit precisely wherever it ships, because the obvious reading is too generous:
+signing defends against SDK **removal**, not SDK **subversion**. A patched client that still
+signs produces byte-identical output to an honest one, so ADR-0007 stands unamended and a
+signed report is still not exoneration.
+
+**Gate 2 — prevalence is not evidence. The fraud-outcome join is a hard dependency.**
+
+Knowing that `ROOT_SU_BINARY` fires on 3% of sessions says nothing about whether those
+sessions are fraudulent. Promotion needs integrity reports joined to authoritative fraud
+outcomes — chargebacks, confirmed account-takeover, manual-review verdicts — and that is a
+dependency on systems this project does not own. Identify it now; it has a longer lead time
+than the code.
+
+Record, before shadow-mode ingestion begins:
+
+| What | Why it blocks promotion |
+| --- | --- |
+| Owning system and team for each outcome source | Nobody can produce the join without them |
+| The join key, and which side supplies it | See the constraint below — it is not ours |
+| Outcome latency (a chargeback can land 90+ days after the session) | Sets the minimum shadow window, and may exceed the retention period |
+| Raw-report retention period and its owner | `PRIVACY_AND_COMPLIANCE.md` recommends <= 90 days and P6 puts retention with the host; recommended is not adopted |
+
+**The join key is not ours to supply, and must not become ours.** `IntegrityReport` carries
+`reportId`, `sdkVersion`, `depth`, `coverage`, `signals`, `generatedAtMillis` and `challenge` —
+and deliberately no stable device identifier, because hard rule 3 forbids IMEI, `ANDROID_ID`,
+MAC and location, and hashes third-party package names. There is nothing in our evidence to
+join on *by design*. The key comes from the host's own session or account context. The
+tempting fix when the join proves awkward is to add a device identifier to the report; that
+breaks hard rule 3 and must be refused.
+
+**Judge a signal on precision at its operating point, not on two rates in isolation.** "Fires
+on 80% of fraudulent devices and 0.2% of legitimate ones" sounds decisive and frequently is
+not. At a 0.1% fraud rate across 100,000 sessions that is 80 true positives against ~200 false
+ones: **precision 29%, so seven in ten flagged users are innocent.** Hard rule 9 makes that
+pure cost — evidence can only incriminate, so a wrong detection has no offsetting benefit to
+trade against. The promotion criterion is the precision the business will actually accept at
+the action being gated, which differs between a balance check and a withdrawal.
+
 ---
 
 ## 2. Timeline summary
@@ -343,7 +402,7 @@ verified on a real runtime, not merely built.
       a `SignalId` exists in code with no catalog entry)
 
 ### Phase 7–8
-- [ ] Canonical report serialisation (stable, versioned) + signing
+- [ ] Canonical report serialisation (stable, versioned) + signing — **gates all weight promotion**
 - [ ] Nonce protocol and replay window
 - [ ] `sample-backend` parsing the canonical wire form and verifying report signatures
 - [ ] Consumer R8 rules; obfuscation build step; hardening review
@@ -360,7 +419,7 @@ verified on a real runtime, not merely built.
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| **False positives lock out real users** | Revenue and support cost; the top risk | Shadow mode first (report, never enforce), per-signal FP analysis, allowlists, staged rollout with a remote kill switch per signal |
+| **False positives lock out real users** | Revenue and support cost; the top risk | Shadow mode first (report, never enforce), per-signal FP analysis, allowlists, staged rollout with a remote kill switch per signal. Promote on **precision at the operating point**, never on hit rate: at a 0.1% fraud rate, 80% recall with a 0.2% false-positive rate is still 29% precision |
 | **Google Play policy rejection** (`QUERY_ALL_PACKAGES`, accessibility scanning) | Cannot ship | Explicit `<queries>` list only; never request `QUERY_ALL_PACKAGES`; document data safety; see PRIVACY doc |
 | **Package-visibility filtering** silently blinds `ENV_*` checks | False negatives read as "clean" | Model visibility as a capability; emit `INCONCLUSIVE`, never "absent → clean" |
 | **Client-side checks bypassed** | Detection value decays | Server-side re-scoring; treat client signals as risk input, never as truth. The integrator's attestation is the backbone, and it is theirs (ADR-0008) |
@@ -382,3 +441,7 @@ verified on a real runtime, not merely built.
 4. Which host apps are the first integrators, and what is their `minSdk` and ABI set?
 5. Public open source or internal? (D10 — affects Phase 8 substantially.)
 6. Is a work-profile / dual-app / cloned-app user a legitimate user for this product?
+7. **Which team owns the fraud outcomes** (chargebacks, confirmed ATO, manual review), what
+   join key can they supply, and how long after a session does an outcome land? Blocks D11.
+8. Who owns the raw-report retention decision, and is the recommended <= 90 days compatible
+   with the outcome latency in (7)? A 90-day window and a 120-day chargeback do not join.
