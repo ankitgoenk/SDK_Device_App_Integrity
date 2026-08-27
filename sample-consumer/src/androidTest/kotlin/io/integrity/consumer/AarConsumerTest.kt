@@ -69,6 +69,6 @@ class AarConsumerTest {
 
         // Hard rule 6 holds across the artifact boundary too.
         assertEquals(0, report.riskScore)
-        assertEquals(Verdict.TRUSTED, report.verdict)
+        assertEquals(Verdict.NO_EVIDENCE_OF_COMPROMISE, report.verdict)
     }
 }

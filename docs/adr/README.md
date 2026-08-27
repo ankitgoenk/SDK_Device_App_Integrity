@@ -31,3 +31,4 @@ What becomes easier, what becomes harder, what we accept.
 | [0006](0006-integration-contract.md) | The app/SDK/backend integration contract | Accepted; partly superseded by 0008 |
 | [0007](0007-asymmetric-trust.md) | Evidence can incriminate, never exonerate | Accepted; partly superseded by 0008 |
 | [0008](0008-attestation-out-of-scope.md) | Attestation leaves our scope; the backend becomes an evidence service | Accepted |
+| [0009](0009-no-trusted-verdict-on-the-client.md) | The client vocabulary loses `TRUSTED` too | Accepted |

@@ -19,7 +19,7 @@ categoryScore = min(100, Σ over signals ( weight(id).points × multiplier(confi
 riskScore = round( 100 × ( 1 − Π over categories ( 1 − factor(c) × categoryScore(c)/100 ) ) )
         │
         ▼   thresholds, then escalation floors
-Verdict ∈ { TRUSTED, LOW_RISK, SUSPICIOUS, COMPROMISED, UNKNOWN }
+Verdict ∈ { NO_EVIDENCE_OF_COMPROMISE, LOW_RISK, SUSPICIOUS, COMPROMISED, UNKNOWN }
 ```
 
 **Why noisy-OR rather than an average.** Averaging across categories dilutes real evidence
@@ -101,13 +101,13 @@ before anyone had seen its false-positive rate. Promoting the weight (for exampl
 | `ATT_APP_NOT_RECOGNISED` (server) | `verdict = COMPROMISED` |
 | `META_NATIVE_UNAVAILABLE` | `verdict ≥ SUSPICIOUS`, score floor 50 |
 | ≥ 2 categories scoring ≥ 40 | `verdict ≥ SUSPICIOUS` (correlated evidence beats any single heuristic) |
-| Coverage < 50% (many `INCONCLUSIVE`) | `verdict = UNKNOWN`, never `TRUSTED` |
+| Coverage < 50% (many `INCONCLUSIVE`) | `verdict = UNKNOWN`, never the bottom rung |
 
 ### Verdict thresholds (default `Policy.balanced()`)
 
 | Score | Verdict |
 | --- | --- |
-| 0–14 | `TRUSTED` |
+| 0–14 | `NO_EVIDENCE_OF_COMPROMISE` |
 | 15–39 | `LOW_RISK` |
 | 40–74 | `SUSPICIOUS` |
 | 75–100 | `COMPROMISED` |
@@ -117,8 +117,8 @@ before anyone had seen its false-positive rate. Promoting the weight (for exampl
 
 `report.coverage` = fraction of enabled, applicable detectors that returned a conclusive
 result. It is reported separately from the score and is the answer to "is a clean report
-meaningful?" A `TRUSTED` verdict with 35% coverage should be treated by a backend as
-`UNKNOWN`.
+meaningful?" A `NO_EVIDENCE_OF_COMPROMISE` verdict at 35% coverage means almost nothing
+ran, and a backend should treat it as `UNKNOWN`.
 
 ## Built-in policies
 
@@ -166,14 +166,16 @@ The SDK never blocks, never crashes, and never shows UI. Suggested host response
 
 | Verdict | Consumer app | High-value action (payment, KYC, withdrawal) |
 | --- | --- | --- |
-| `TRUSTED` | Proceed | Proceed |
+| `NO_EVIDENCE_OF_COMPROMISE` | Proceed | Proceed |
 | `LOW_RISK` | Proceed, log | Proceed, log |
 | `SUSPICIOUS` | Proceed; flag server-side; raise limits scrutiny | Step-up auth; delay; server-side review |
 | `COMPROMISED` | Degrade quietly (disable sensitive features), flag server-side | Refuse server-side, with a generic message |
 | `UNKNOWN` | Proceed; retry evaluation later | Treat as `SUSPICIOUS` |
 
-**Decide server-side wherever it matters.** The client can be patched to report `TRUSTED`;
-the backend's copy of the decision cannot. See
+**Decide server-side wherever it matters.** The client can be patched to report anything,
+and no rung of this enum is a grant of trust — ADR-0009 removed the name `TRUSTED` precisely
+so that the table above cannot be misread as an authorisation policy. It is a suggestion for
+*local* degradation; the decision that matters is the server's. See
 [SERVER_VERIFICATION.md](SERVER_VERIFICATION.md).
 
 **Do not react at the point of detection.** Immediately closing the app when a check fires

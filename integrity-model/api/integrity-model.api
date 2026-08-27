@@ -153,8 +153,8 @@ public final class io/integrity/core/SignalId$Companion {
 public final class io/integrity/core/Verdict : java/lang/Enum {
 	public static final field COMPROMISED Lio/integrity/core/Verdict;
 	public static final field LOW_RISK Lio/integrity/core/Verdict;
+	public static final field NO_EVIDENCE_OF_COMPROMISE Lio/integrity/core/Verdict;
 	public static final field SUSPICIOUS Lio/integrity/core/Verdict;
-	public static final field TRUSTED Lio/integrity/core/Verdict;
 	public static final field UNKNOWN Lio/integrity/core/Verdict;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/Verdict;

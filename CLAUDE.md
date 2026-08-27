@@ -43,7 +43,9 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
    something in the report raises trust — including a client-supplied `coverage`. See ADR-0007.
    This project performs **no attestation** and its backend has no `TRUSTED` state and no
    access action: it grades evidence, the integrator decides. Do not add an `ALLOW` back
-   without a new ADR — see ADR-0008.
+   without a new ADR — see ADR-0008. **Neither vocabulary may contain a name a caller could
+   read as permission**: `Verdict` (client) and `DeviceState` (server) both had a `TRUSTED`
+   rung and both lost it, and a test pins the membership of each. See ADR-0009.
 10. A gate that cannot fail is worse than no gate. Anything asserting a security property
    ships with proof it rejects the broken case: a positive control, a deliberately broken
    implementation the suite must catch, or a mutant. This has caught more real defects here

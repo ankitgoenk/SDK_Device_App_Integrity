@@ -40,9 +40,22 @@ public enum class Depth {
 /**
  * The SDK's summary opinion. Hosts should treat this as risk input, not as truth:
  * a patched client can report anything. See docs/SERVER_VERIFICATION.md.
+ *
+ * **No member of this enum means "trusted", and that is deliberate (ADR-0009).** The bottom
+ * rung used to be called `TRUSTED`, which made `if (report.verdict == TRUSTED) allow()` the
+ * obvious thing to write — a decision taken on the device, from unsigned local evidence,
+ * which is the single failure this architecture exists to prevent. ADR-0006 §2 had already
+ * moved `verdict` under `clientAdvisory` on the wire for exactly that reason; the in-process
+ * type kept the hazard until ADR-0009 removed the name.
  */
 public enum class Verdict {
-    TRUSTED,
+    /**
+     * Scored below the low-risk floor: nothing found that carries weight.
+     *
+     * An absence, not a pass. A healthy device and a client patched to stay silent produce
+     * this identically, so it can never be a reason to permit anything.
+     */
+    NO_EVIDENCE_OF_COMPROMISE,
     LOW_RISK,
     SUSPICIOUS,
     COMPROMISED,

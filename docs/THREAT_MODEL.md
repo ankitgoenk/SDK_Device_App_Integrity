@@ -57,7 +57,7 @@ evidence.
 - **Screen capture / remote control:** MediaProjection-based streaming, TeamViewer-style RAT.
 
 ### 5. Attacks on the SDK itself
-- Patch `Verdict` construction to always return `TRUSTED`.
+- Patch `Verdict` construction to always return the bottom rung.
 - Hook the public API (`evaluate`) and return a cached clean report.
 - Strip the SDK's initialisation call from the host app entirely.
 - Replace the native `.so` with a stub, or hook `System.loadLibrary`.

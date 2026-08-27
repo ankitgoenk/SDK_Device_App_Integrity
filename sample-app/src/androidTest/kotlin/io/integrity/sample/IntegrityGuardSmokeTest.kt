@@ -48,7 +48,7 @@ class IntegrityGuardSmokeTest {
             0,
             report.riskScore
         )
-        assertEquals(Verdict.TRUSTED, report.verdict)
+        assertEquals(Verdict.NO_EVIDENCE_OF_COMPROMISE, report.verdict)
     }
 
     /** Privacy rules P4/P5, checked on the real evidence the detectors produce. */

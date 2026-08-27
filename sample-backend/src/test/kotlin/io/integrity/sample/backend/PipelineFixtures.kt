@@ -120,5 +120,5 @@ internal fun VerificationService.submit(
     purpose
 )
 
-internal val ADVISORY_LYING = ClientAdvisory(Verdict.TRUSTED, 0, 1000)
+internal val ADVISORY_LYING = ClientAdvisory(Verdict.NO_EVIDENCE_OF_COMPROMISE, 0, 1000)
 internal val ADVISORY_PANICKING = ClientAdvisory(Verdict.COMPROMISED, 100, 0)
