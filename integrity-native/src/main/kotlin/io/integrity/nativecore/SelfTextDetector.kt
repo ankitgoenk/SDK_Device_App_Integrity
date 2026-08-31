@@ -39,7 +39,17 @@ import io.integrity.core.SignalId
  * silent. Not anything about other libraries. Not anything about a `.so` that was already
  * tampered with on disk, where memory and file agree because both are the attacker's.
  */
-internal class SelfTextDetector(private val api: NativeApi = NativeBridge) : Detector {
+internal class SelfTextDetector(
+    private val api: NativeApi = NativeBridge,
+    /**
+     * Whether the host packages the native core, mirroring [NativeDetectors.all].
+     *
+     * Without it a host that never asked for native would be told its hooking check failed,
+     * which is a defect report rather than a configuration fact.
+     */
+    private val expectedByHost: Boolean = true,
+    private val loader: NativeLibraryLoader = SystemLibraryLoader
+) : Detector {
 
     override val id: String = "hooking.self-text"
     override val category: Category = Category.HOOKING
@@ -49,12 +59,32 @@ internal class SelfTextDetector(private val api: NativeApi = NativeBridge) : Det
     override val minDepth: Depth = Depth.FULL
 
     override suspend fun detect(context: DetectionContext): List<Signal> {
+        if (!expectedByHost) return listOf(inconclusive("not_configured"))
+
+        // Load the library here rather than assuming someone else already did.
+        //
+        // This detector used to call straight into JNI. `DetectionEngine` dispatches every
+        // detector concurrently, and the only `System.loadLibrary` call in the module lives
+        // in `NativeCore`, which `NativeIntegrityDetector` owns — so whether this worked
+        // depended on which coroutine reached its first line first. When this one won, the
+        // external function threw `UnsatisfiedLinkError`, `runCatching` swallowed it, and a
+        // working detector reported `call_failed` on a healthy device. Observed on a Pixel
+        // 10a: `NativeIntegrityDetector` reported the library fine while this reported the
+        // call failing, in the same evaluation two milliseconds apart.
+        //
+        // `System.loadLibrary` is idempotent and the JVM serialises it, so two detectors
+        // both ensuring it is cheaper than any ordering contract between them would be.
+        val loaded = runCatching { loader.load(NativeCore.LIBRARY_NAME) }.isSuccess
+        if (!loaded) return listOf(inconclusive("library_unavailable"))
+
         val values = runCatching { api.measureSelfText() }.getOrNull()
 
         // One expression rather than a ladder of early returns: the whole decision table is
         // five lines, and reading it as a table is how you check the important property —
         // that nothing falls through to silence except a genuine clean result.
         return when {
+            // The library is loaded by this point, so this is the call itself failing
+            // rather than the library being absent. The two used to be one reason.
             values == null -> listOf(inconclusive("call_failed"))
             values.size < EXPECTED_VALUES -> listOf(inconclusive("malformed_result"))
             values[NativeCore.MEASURE_STATUS].toInt() != NativeCore.STATUS_OK ->

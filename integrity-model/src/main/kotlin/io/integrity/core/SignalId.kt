@@ -28,6 +28,19 @@ public value class SignalId(public val value: String) {
         /** Host misconfiguration, e.g. no signing pin supplied. */
         public val META_CONFIG_INVALID: SignalId = SignalId("META_CONFIG_INVALID")
 
+        /**
+         * Package visibility was denied, so package-based results are incomplete.
+         *
+         * ADR-0004, `INTEGRATION.md` and the `<queries>` manifest fragment all stated that
+         * the report carries this. None of them was true: the id did not exist and nothing
+         * emitted it, while a filtered probe reported only its own `INCONCLUSIVE` signal.
+         *
+         * The distinction it restores is the one ADR-0004 cares about: a *specific* check
+         * could not see a package, versus **this report as a whole was assembled without
+         * package visibility**. A reader of one signal cannot infer the second.
+         */
+        public val META_VISIBILITY_RESTRICTED: SignalId = SignalId("META_VISIBILITY_RESTRICTED")
+
         // --- NATIVE CORE (phase 3a) --------------------------------------------------
         // Three of these describe the SDK's own state, not the device's. Only a
         // self-check mismatch is positive evidence about the artifact: a library that
