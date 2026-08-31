@@ -203,6 +203,33 @@ world-writable paths, debuggable flag.
 - **Exit:** repackaged/re-signed sample APK is detected; Play App Signing rotation does not
   false-positive; split APKs / Play Feature Delivery handled.
 
+> **Baseline generation implemented, and *inject* turned out to be the wrong word.**
+> `BaselineComputer` digests every `classes*.dex` and `lib/**/*.so` of a packaged artifact into
+> canonical JSON; `IntegrityBaselineTask` wires that to a variant's APK through AGP's public
+> artifact API, so an R8 change that shifts the dex layout updates the baseline with no human
+> in the loop. Verified against the real `sample-app` APK: 9 dex, 7 native libraries, and
+> correctly no `lib/x86/libintegrity.so`, which `abiFilters` does not build.
+>
+> **The baseline is a build output, not an embedded asset, and that was forced rather than
+> chosen.** A digest of the APK cannot live inside that APK. Digesting only the dex and adding
+> the result as an asset would dodge the circularity — assets are packaged after dexing — but
+> AGP 8.9 exposes no stable public API for pre-packaging dex outputs. The constraint points
+> where the architecture already did: a baseline shipped beside the code an attacker rewrote is
+> worth nothing, because they regenerate it. So the client measures its own dex and reports what
+> it found, and only a party holding this file independently can say the report is wrong.
+> ADR-0006's division of labour and ADR-0007's asymmetry, reached by arithmetic.
+>
+> **Left in this phase**, and none of it is blocked on the plugin:
+> - `APP_DEX_DIGEST_MISMATCH` has no client half yet. It cannot be a local comparison for the
+>   reason above; it is a *measurement* the client reports and the backend compares.
+> - The AGP variant wiring **compiles but has never run**: `integrity-baseline-plugin` is a
+>   project in this build, not an included build, so nothing here can apply it. A TestKit
+>   functional test against a synthetic Android project is the honest way to close that, and
+>   until it exists the wiring is unverified. The digesting, which is the part that can be
+>   wrong, is unit-tested and was run against a real APK.
+> - Signing-cert pins and the native string vault remain in the extension as configuration the
+>   task does not yet consume.
+
 ### Phase 5 — Hostile-app & environment detection *(1 week)*
 Signals `ENV_*`. Scoped, allow-listed `<queries>` probes for patchers (Lucky Patcher),
 memory editors (GameGuardian), MITM proxies (HttpCanary et al.), cloners/virtual spaces,

@@ -15,6 +15,9 @@ gradlePlugin {
 }
 
 dependencies {
+    // compileOnly: AGP is provided by the consuming build, never shipped by us.
+    compileOnly(libs.android.gradlePlugin)
+
     testImplementation(libs.junit)
     testImplementation(libs.truth)
 }
