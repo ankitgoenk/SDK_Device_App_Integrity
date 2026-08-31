@@ -268,3 +268,40 @@ The wording that must appear in the catalog and in any host-facing documentation
 #13  detector implementation, with the fixtures, bypass,
      property and mutation coverage specified above
 ```
+
+## Field defect: the detector reported `call_failed` on a healthy device
+
+Found on a rooted Pixel 10a (Android 16), which is also the device it was expected to have
+the most to say about. `sample-app` reported:
+
+```
+HOOK_SELF_TEXT_MISMATCH [HOOKING/INCONCLUSIVE] {reason=call_failed}
+```
+
+**It was not the root, and it was not the measurement.** `DetectionEngine` dispatches every
+detector concurrently, and the only `System.loadLibrary` call in the module lived in
+`NativeCore`, which `NativeIntegrityDetector` owns. `SelfTextDetector` called straight into
+JNI. Whether it worked depended on which coroutine reached its first line first; when this
+one won, the external function threw `UnsatisfiedLinkError`, `runCatching` swallowed it, and
+a working detector reported a failure. In the same evaluation, two milliseconds apart,
+`NativeIntegrityDetector` reported the library loaded fine.
+
+`SelfTextDetector` now ensures the library itself. `System.loadLibrary` is idempotent and the
+JVM serialises it, so two detectors both ensuring it costs less than any ordering contract
+between them would. Measured effect on that device: coverage 57% → 71%, and the signal
+disappeared because the measurement now completes and finds no difference.
+
+`library_unavailable` and `not_configured` are now distinct from `call_failed`. Collapsing
+them is what hid this: a missing library and a broken call read identically.
+
+### Why the suite was green throughout
+
+`aDivergentFileIsDetected` — the module's only positive control — could `println("SKIPPED")`
+and return when it could not find its own mapping, and still pass. `check-instrumented-
+coverage.py` counts a test that ran, not a test that asserted. Both skip paths are gone; the
+lookup now accepts APK-backed mappings as well as extracted ones, and a mapping that cannot
+be found is a failure telling the reader to widen the lookup rather than a silent pass.
+
+Proven live rather than assumed: with the byte comparison in `selftext.cpp` mutated so
+differences are never counted, the control fails with *"the modified byte was not detected,
+so the clean zero above proves nothing"*.

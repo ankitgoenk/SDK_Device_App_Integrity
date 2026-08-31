@@ -19,6 +19,8 @@
         <!-- Root managers — ENV_HOOK_MANAGER_APP / ROOT_MANAGER_PACKAGE -->
         <package android:name="com.topjohnwu.magisk" />
         <package android:name="me.weishu.kernelsu" />
+        <package android:name="com.rifsxd.ksunext" />
+        <package android:name="me.bmax.apatch" />
         <package android:name="eu.chainfire.supersu" />
         <package android:name="com.koushikdutta.superuser" />
         <package android:name="com.noshufou.android.su" />

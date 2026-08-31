@@ -145,6 +145,7 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getMETA_NATIVE_FAILED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_NATIVE_NOT_CONFIGURED-isIsmlw ()Ljava/lang/String;
 	public final fun getMETA_NATIVE_UNAVAILABLE-isIsmlw ()Ljava/lang/String;
+	public final fun getMETA_VISIBILITY_RESTRICTED-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_DANGEROUS_PROPS-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_SU_BINARY-isIsmlw ()Ljava/lang/String;

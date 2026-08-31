@@ -43,9 +43,30 @@ class RootManagerPackageDetectorTest {
     fun `nothing visible under package filtering is inconclusive, never clean`() = runTest {
         val signals = detect(FakePackageProbe(absenceIsConclusive = false))
 
-        val signal = signals.single()
-        assertThat(signal.confidence).isEqualTo(Confidence.INCONCLUSIVE)
-        assertThat(signal.evidence["reason"]).isEqualTo("package_visibility_filtered")
+        val filtered = signals.single { it.id == SignalId.ROOT_MANAGER_PACKAGE }
+        assertThat(filtered.confidence).isEqualTo(Confidence.INCONCLUSIVE)
+        assertThat(filtered.evidence["reason"]).isEqualTo("package_visibility_filtered")
+
+        // ADR-0004, INTEGRATION.md and the <queries> fragment all said the report carries
+        // this. Until now none of them was true — the id did not exist and nothing emitted
+        // it. The two signals answer different questions: this check could not conclude,
+        // and the report as a whole was assembled without package visibility.
+        val restricted = signals.single { it.id == SignalId.META_VISIBILITY_RESTRICTED }
+        assertThat(restricted.confidence).isEqualTo(Confidence.INCONCLUSIVE)
+        assertThat(restricted.evidence["scope"]).isEqualTo("root_manager_packages")
+    }
+
+    @Test
+    fun `visibility is not reported as restricted when the probe can conclude`() = runTest {
+        // The negative control: if META_VISIBILITY_RESTRICTED appeared on a device that can
+        // see packages, it would be noise on every healthy Android 10 and below.
+        val clean = detect(FakePackageProbe(absenceIsConclusive = true))
+        val found = detect(FakePackageProbe(installed = setOf("com.rifsxd.ksunext")))
+
+        assertThat(clean.map { it.id }).doesNotContain(SignalId.META_VISIBILITY_RESTRICTED)
+        assertThat(found.map { it.id }).doesNotContain(SignalId.META_VISIBILITY_RESTRICTED)
+        // And the newly queryable manager is actually detected.
+        assertThat(found.single().id).isEqualTo(SignalId.ROOT_MANAGER_PACKAGE)
     }
 
     @Test

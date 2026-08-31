@@ -32,7 +32,18 @@ target_compile_options(integrity PRIVATE
 # asserts that rather than trusting it (ADR-0002).
 target_link_options(integrity PRIVATE
         -Wl,--gc-sections
-        -Wl,--exclude-libs,ALL)
+        -Wl,--exclude-libs,ALL
+        # 16 KB page support. NDK r27 still links at a 4 KB max-page-size, so without this
+        # every LOAD segment is aligned 0x1000 and the library will not load on a 16 KB-page
+        # device. An Android 16 Pixel raised exactly that warning against this .so.
+        #
+        # A linker option, not a compile one: passing it through cppFlags reaches clang as a
+        # compile argument, which -Werror rejects as unused.
+        #
+        # This is a distribution property rather than a detection one, and it is not ours to
+        # get wrong quietly: an SDK ships inside someone else's app, so every consumer
+        # inherits the alignment we link with.
+        -Wl,-z,max-page-size=16384)
 
 set_target_properties(integrity PROPERTIES
         CXX_VISIBILITY_PRESET hidden

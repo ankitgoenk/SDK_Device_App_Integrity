@@ -23,6 +23,22 @@ class SelfTextDetectorTest {
         override val config = IntegrityConfig.Builder().build()
     }
 
+    /**
+     * Records whether the detector loaded the library before calling into it.
+     *
+     * The regression this exists for is invisible to a test that assumes the library is
+     * already there — which every test here did, which is why the defect reached a device.
+     */
+    private class RecordingLoader(private val succeeds: Boolean = true) : NativeLibraryLoader {
+        var loadCount = 0
+            private set
+
+        override fun load(name: String) {
+            loadCount++
+            if (!succeeds) throw UnsatisfiedLinkError("no $name in this test")
+        }
+    }
+
     private class Fake(private val values: LongArray?) : NativeApi {
         override fun selfCheck(expectedToken: String) = NativeCore.STATUS_OK
         override fun probeUnmappedRead() = NativeCore.STATUS_UNAVAILABLE
@@ -30,6 +46,10 @@ class SelfTextDetectorTest {
         override fun measureSelfText(): LongArray? = values
         override fun measureSelfTextFrom(mapsPath: String): LongArray? = values
     }
+
+    /** Every decision-table test below is about the counters, so the library always loads. */
+    private fun detector(values: LongArray?, loader: NativeLibraryLoader = RecordingLoader()) =
+        SelfTextDetector(Fake(values), expectedByHost = true, loader = loader)
 
     private fun measurement(
         status: Int = NativeCore.STATUS_OK,
@@ -42,14 +62,14 @@ class SelfTextDetectorTest {
 
     @Test
     fun aMatchingLibraryProducesNoSignal() = runTest {
-        val signals = SelfTextDetector(Fake(measurement())).detect(NoContext)
+        val signals = detector(measurement()).detect(NoContext)
 
         assertThat(signals).isEmpty()
     }
 
     @Test
     fun aDifferenceIsPossibleAndNeverHigher() = runTest {
-        val signals = SelfTextDetector(Fake(measurement(differing = 4, firstAt = 512)))
+        val signals = detector(measurement(differing = 4, firstAt = 512))
             .detect(NoContext)
 
         assertThat(signals).hasSize(1)
@@ -65,7 +85,7 @@ class SelfTextDetectorTest {
 
     @Test
     fun evidenceCarriesNothingIdentifying() = runTest {
-        val signals = SelfTextDetector(Fake(measurement(differing = 1))).detect(NoContext)
+        val signals = detector(measurement(differing = 1)).detect(NoContext)
 
         signals.single().evidence.forEach { (key, value) ->
             assertThat(value).doesNotContain("/")
@@ -84,8 +104,8 @@ class SelfTextDetectorTest {
         )
 
         expected.forEach { (code, reason) ->
-            val signals = SelfTextDetector(
-                Fake(measurement(status = NativeCore.STATUS_UNAVAILABLE, reason = code.toLong()))
+            val signals = detector(
+                measurement(status = NativeCore.STATUS_UNAVAILABLE, reason = code.toLong())
             ).detect(NoContext)
 
             val signal = signals.single()
@@ -97,7 +117,7 @@ class SelfTextDetectorTest {
     /** Hard rule 2: a check that could not run says so. It never returns nothing. */
     @Test
     fun aFailedCallIsInconclusiveRatherThanSilent() = runTest {
-        val signals = SelfTextDetector(Fake(null)).detect(NoContext)
+        val signals = detector(null).detect(NoContext)
 
         assertThat(signals.single().confidence).isEqualTo(Confidence.INCONCLUSIVE)
         assertThat(signals.single().evidence["reason"]).isEqualTo("call_failed")
@@ -105,7 +125,7 @@ class SelfTextDetectorTest {
 
     @Test
     fun aTruncatedResultIsInconclusiveRatherThanIndexedInto() = runTest {
-        val signals = SelfTextDetector(Fake(longArrayOf(0, 1))).detect(NoContext)
+        val signals = detector(longArrayOf(0, 1)).detect(NoContext)
 
         assertThat(signals.single().evidence["reason"]).isEqualTo("malformed_result")
     }
@@ -117,9 +137,59 @@ class SelfTextDetectorTest {
      */
     @Test
     fun successWithNothingComparedIsNotACleanResult() = runTest {
-        val signals = SelfTextDetector(Fake(measurement(compared = 0))).detect(NoContext)
+        val signals = detector(measurement(compared = 0)).detect(NoContext)
 
         assertThat(signals.single().confidence).isEqualTo(Confidence.INCONCLUSIVE)
         assertThat(signals.single().evidence["reason"]).isEqualTo("nothing_compared")
+    }
+
+    // --- the regression: this detector must not depend on another one having run ---------
+
+    @Test
+    fun theLibraryIsLoadedBeforeTheCallRatherThanAssumedLoaded() = runTest {
+        // The engine dispatches detectors concurrently. This one used to call straight into
+        // JNI and depend on NativeIntegrityDetector having won the race, which on a Pixel
+        // 10a it did not: a healthy device reported `call_failed`.
+        val loader = RecordingLoader()
+
+        detector(measurement(), loader).detect(NoContext)
+
+        assertThat(loader.loadCount).isEqualTo(1)
+    }
+
+    @Test
+    fun aLibraryThatWillNotLoadIsUnavailableRatherThanACallFailure() = runTest {
+        // Two different facts about a device. Collapsing them is what hid the race: a
+        // missing library and a broken call both read as `call_failed`.
+        val signals = detector(measurement(), RecordingLoader(succeeds = false)).detect(NoContext)
+
+        assertThat(signals).hasSize(1)
+        assertThat(signals[0].confidence).isEqualTo(Confidence.INCONCLUSIVE)
+        assertThat(signals[0].evidence["reason"]).isEqualTo("library_unavailable")
+    }
+
+    @Test
+    fun aHostThatDidNotPackageNativeIsAConfigurationFactNotAFailure() = runTest {
+        val loader = RecordingLoader()
+        val signals = SelfTextDetector(Fake(measurement()), expectedByHost = false, loader = loader)
+            .detect(NoContext)
+
+        assertThat(signals[0].evidence["reason"]).isEqualTo("not_configured")
+        // And it must not have gone looking for a library the host never shipped.
+        assertThat(loader.loadCount).isEqualTo(0)
+    }
+
+    @Test
+    fun everyPreMeasurementFailureHasItsOwnReason() = runTest {
+        // The reasons must stay distinguishable; that is the property the C++ header states
+        // for its own reason codes, and it now has to hold on the Kotlin side too.
+        val reasons = listOf(
+            detector(measurement(), RecordingLoader(succeeds = false)),
+            detector(null),
+            detector(longArrayOf(0, 1))
+        ).map { it.detect(NoContext).single().evidence["reason"] }
+
+        assertThat(reasons).containsExactly("library_unavailable", "call_failed", "malformed_result")
+        assertThat(reasons.toSet()).hasSize(reasons.size)
     }
 }

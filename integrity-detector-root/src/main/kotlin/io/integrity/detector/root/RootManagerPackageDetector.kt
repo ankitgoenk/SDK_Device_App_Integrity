@@ -65,12 +65,21 @@ internal class RootManagerPackageDetector(
 
         if (packages.absenceIsConclusive) return emptyList()
 
+        // Two signals, because they answer different questions. The first says this check
+        // could not conclude; the second says the report was assembled without package
+        // visibility at all, which is what ADR-0004 promised a reader would be told.
         return listOf(
             Signal(
                 id = SignalId.ROOT_MANAGER_PACKAGE,
                 category = Category.ROOT,
                 confidence = Confidence.INCONCLUSIVE,
                 evidence = mapOf("reason" to "package_visibility_filtered")
+            ),
+            Signal(
+                id = SignalId.META_VISIBILITY_RESTRICTED,
+                category = Category.META,
+                confidence = Confidence.INCONCLUSIVE,
+                evidence = mapOf("scope" to "root_manager_packages")
             )
         )
     }
@@ -81,6 +90,11 @@ internal class RootManagerPackageDetector(
         val MANAGER_PACKAGES = listOf(
             "com.topjohnwu.magisk",
             "me.weishu.kernelsu",
+            // KernelSU Next: the actively maintained fork, and the one found on the
+            // project's rooted Pixel 10a while the list above matched nothing.
+            "com.rifsxd.ksunext",
+            // APatch, catalogued as ROOT_APATCH since phase 2 and never queryable.
+            "me.bmax.apatch",
             "eu.chainfire.supersu",
             "com.koushikdutta.superuser",
             "com.noshufou.android.su"

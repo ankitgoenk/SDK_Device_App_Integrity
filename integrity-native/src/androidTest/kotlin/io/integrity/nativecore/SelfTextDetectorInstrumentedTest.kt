@@ -38,27 +38,35 @@ class SelfTextDetectorInstrumentedTest {
         val length: Int get() = (end - start).toInt()
     }
 
-    private fun describesOwnExecutableMapping(fields: List<String>): Boolean {
-        if (fields.size != 6) return false
-        return fields[1].startsWith("r-x") && fields[5].contains("libintegrity.so")
+    /**
+     * Candidate mappings this module could be living in.
+     *
+     * Two shapes, because two packagings are both normal. When the `.so` is extracted the
+     * path names it directly. When it is stored uncompressed the loader maps it **straight
+     * out of the APK**, so the path is `/data/app/.../base.apk` at a file offset and the
+     * word `libintegrity` appears nowhere — which is the shape a Pixel 10a produced, and
+     * which the old single-shape lookup could not see.
+     *
+     * Widening the search is safe because it is not the thing that decides correctness:
+     * [aDivergentFileIsDetected]'s first assertion re-measures through the chosen mapping
+     * and requires it to reproduce the clean answer. A wrong candidate fails there, loudly.
+     */
+    private fun candidateMappings(): List<OwnMapping> = File("/proc/self/maps").readLines().mapNotNull { line ->
+        val fields = line.trim().split(Regex("\\s+"), limit = 6)
+        if (fields.size != 6 || !fields[1].startsWith("r-x")) return@mapNotNull null
+        val path = fields[5]
+        val plausible = path.contains("libintegrity.so") ||
+            (path.endsWith(".apk") && path.contains("io.integrity"))
+        if (!plausible) return@mapNotNull null
+        val addresses = fields[0].split("-")
+        if (addresses.size != 2) return@mapNotNull null
+        OwnMapping(
+            start = addresses[0].toLong(16),
+            end = addresses[1].toLong(16),
+            fileOffset = fields[2].toLong(16),
+            path = path
+        )
     }
-
-    /** Finds this library's executable mapping by walking /proc/self/maps independently. */
-    private fun findOwnExecutableMapping(): OwnMapping? =
-        File("/proc/self/maps").readLines().firstNotNullOfOrNull { line ->
-            val fields = line.trim().split(Regex("\\s+"), limit = 6)
-            val addresses = fields.firstOrNull()?.split("-").orEmpty()
-            if (!describesOwnExecutableMapping(fields) || addresses.size != 2) {
-                null
-            } else {
-                OwnMapping(
-                    start = addresses[0].toLong(16),
-                    end = addresses[1].toLong(16),
-                    fileOffset = fields[2].toLong(16),
-                    path = fields[5]
-                )
-            }
-        }
 
     private fun cacheFile(name: String): File =
         File(ApplicationProvider.getApplicationContext<Context>().cacheDir, name)
@@ -108,22 +116,32 @@ class SelfTextDetectorInstrumentedTest {
     fun aDivergentFileIsDetected() {
         SystemLibraryLoader.load(NativeCore.LIBRARY_NAME)
 
-        val mapping = findOwnExecutableMapping()
-        if (mapping == null) {
-            println("SKIPPED: no executable mapping for libintegrity.so; fixture not built")
-            return
+        // No skip path. This is the module's only positive control, and a control that can
+        // quietly decline to run is worse than no control: it reports green while asserting
+        // nothing, and tools/check-instrumented-coverage.py counts it as a test that ran.
+        // It used to `println("SKIPPED: ...")` and return — which is how a load-ordering
+        // race in SelfTextDetector reached a device with the suite green.
+        val candidates = candidateMappings()
+        assertTrue(
+            "no executable mapping for this module in /proc/self/maps; the lookup is wrong, " +
+                "not the device — widen candidateMappings() rather than skipping",
+            candidates.isNotEmpty()
+        )
+
+        val mapping = candidates.firstNotNullOfOrNull { candidate ->
+            extractMappedBytes(candidate)?.takeIf { it.isNotEmpty() }?.let { candidate to it }
         }
-        val original = extractMappedBytes(mapping)
-        if (original == null || original.isEmpty()) {
-            println("SKIPPED: could not read the mapped extent from ${mapping.path}")
-            return
-        }
+        assertNotNull(
+            "none of ${candidates.size} candidate mapping(s) could be read from disk",
+            mapping
+        )
+        val (chosen, original) = mapping!!
 
         // 1. The faithful copy must reproduce the clean answer. If it does not, the
         //    synthetic table is wrong and any difference below would be the fixture's
         //    fault rather than a detection.
         val faithful = cacheFile("integrity-faithful.bin").apply { writeBytes(original) }
-        val cleanValues = NativeBridge.measureSelfTextFrom(writeMapsTable(mapping, faithful).path)
+        val cleanValues = NativeBridge.measureSelfTextFrom(writeMapsTable(chosen, faithful).path)
         assertNotNull(cleanValues)
         assertEquals(
             "the synthetic table did not reproduce the clean result, so the fixture is wrong",
@@ -140,7 +158,7 @@ class SelfTextDetectorInstrumentedTest {
         assertTrue("the fixture did not actually diverge", modified[0] != original[0])
         val divergent = cacheFile("integrity-divergent.bin").apply { writeBytes(modified) }
 
-        val values = NativeBridge.measureSelfTextFrom(writeMapsTable(mapping, divergent).path)
+        val values = NativeBridge.measureSelfTextFrom(writeMapsTable(chosen, divergent).path)
         assertNotNull(values)
         assertEquals(NativeCore.STATUS_OK, values!![NativeCore.MEASURE_STATUS].toInt())
         assertEquals(

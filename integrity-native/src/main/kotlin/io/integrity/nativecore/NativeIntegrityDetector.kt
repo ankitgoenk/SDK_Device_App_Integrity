@@ -93,6 +93,6 @@ public object NativeDetectors {
         NativeIntegrityDetector(
             NativeCore(expectedByHost = expected, expectedToken = IntegrityReport.SDK_VERSION)
         ),
-        SelfTextDetector()
+        SelfTextDetector(expectedByHost = expected)
     )
 }
