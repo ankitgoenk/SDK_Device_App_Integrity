@@ -89,6 +89,39 @@ public final class io/integrity/core/ReportWire {
 	public final fun canonicalJson (Lio/integrity/core/IntegrityReport;)Ljava/lang/String;
 }
 
+public final class io/integrity/core/ReportWireParser {
+	public static final field INSTANCE Lio/integrity/core/ReportWireParser;
+	public final fun parse (Ljava/lang/String;)Lio/integrity/core/ReportWireParser$ParsedReport;
+}
+
+public final class io/integrity/core/ReportWireParser$ParsedAdvisory {
+	public fun <init> (Ljava/lang/String;JLjava/util/Map;)V
+	public final fun getCategoryScores ()Ljava/util/Map;
+	public final fun getRiskScore ()J
+	public final fun getVerdict ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/ReportWireParser$ParsedReport {
+	public fun <init> (JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJLjava/util/List;Lio/integrity/core/ReportWireParser$ParsedAdvisory;)V
+	public final fun getChallenge ()Ljava/lang/String;
+	public final fun getClientAdvisory ()Lio/integrity/core/ReportWireParser$ParsedAdvisory;
+	public final fun getCoveragePermille ()J
+	public final fun getDepth ()Ljava/lang/String;
+	public final fun getGeneratedAtMillis ()J
+	public final fun getReportId ()Ljava/lang/String;
+	public final fun getSdkVersion ()Ljava/lang/String;
+	public final fun getSignals ()Ljava/util/List;
+	public final fun getWireVersion ()J
+}
+
+public final class io/integrity/core/ReportWireParser$ParsedSignal {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCategory ()Ljava/lang/String;
+	public final fun getConfidence ()Ljava/lang/String;
+	public final fun getEvidence ()Ljava/util/Map;
+	public final fun getId-isIsmlw ()Ljava/lang/String;
+}
+
 public final class io/integrity/core/RiskScorer {
 	public static final field CORROBORATION_THRESHOLD I
 	public static final field MAX_SCORE I
@@ -148,6 +181,34 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getROOT_DANGEROUS_PROPS-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_SU_BINARY-isIsmlw ()Ljava/lang/String;
+	public final fun getSRV_REPORT_SIGNATURE_INVALID-isIsmlw ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/SignedReport {
+	public static final field ENVELOPE_TAG Ljava/lang/String;
+	public static final field INSTANCE Lio/integrity/core/SignedReport;
+	public final fun parse (Ljava/lang/String;)Lio/integrity/core/SignedReport$Envelope;
+	public final fun seal (Lio/integrity/core/SignedReport$SigningInput;[B)Ljava/lang/String;
+	public final fun signingInput (Lio/integrity/core/SignedReport$Header;Ljava/lang/String;)Lio/integrity/core/SignedReport$SigningInput;
+}
+
+public final class io/integrity/core/SignedReport$Envelope {
+	public final fun getCanonicalReportJson ()Ljava/lang/String;
+	public final fun getHeader ()Lio/integrity/core/SignedReport$Header;
+	public final fun getSignature ()[B
+	public final fun getSignedBytes ()[B
+}
+
+public final class io/integrity/core/SignedReport$Header {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun getKeyId ()Ljava/lang/String;
+	public final fun getPackageName ()Ljava/lang/String;
+	public final fun getSdkVersion ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class io/integrity/core/SignedReport$SigningInput {
+	public final fun getBytes ()[B
 }
 
 public final class io/integrity/core/Verdict : java/lang/Enum {

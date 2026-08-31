@@ -24,9 +24,9 @@ data class ClientAdvisory(val verdict: Verdict, val riskScore: Int, val coverage
 /**
  * A report as the backend receives it, already parsed.
  *
- * Parsing the canonical wire form is out of scope here: `ReportWire` serialises, and writing a
- * matching parser is transport plumbing that would obscure what this PR is about. Tests build
- * this structure directly.
+ * [SubmittedReports.fromCanonicalJson] builds one from the wire form, using the parser in
+ * `integrity-model` so that both ends of the format are one implementation. Tests may also
+ * build this structure directly, which is why it stays a plain data class.
  */
 data class SubmittedReport(
     val challenge: String?,
@@ -40,6 +40,15 @@ data class SubmittedReport(
 data class ReportSubmission(
     val sessionId: String,
     val report: SubmittedReport,
+    /**
+     * The signed envelope the report arrived in, if the host signs.
+     *
+     * Optional, and its absence is never held against the submission: an unsigned report is
+     * an integration that has not adopted signing, not an attack (ADR-0011 §2). A signature
+     * that is *present and wrong* is a different matter, and that is the only case that
+     * produces evidence.
+     */
+    val envelope: String? = null,
     /**
      * An upper bound the client asks for on the resulting finding's life.
      *

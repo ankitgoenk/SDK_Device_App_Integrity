@@ -37,14 +37,33 @@ import io.integrity.core.Verdict
  * reading as clean, and reusing it here would let a client suppress evidence it had already
  * sent by claiming it had not looked hard.
  *
- * Not implemented here: report signature verification, which needs key distribution, and
- * parsing the canonical wire form. Both are transport concerns; neither changes the above.
+ * ### Signature verification changes none of the above, deliberately
+ *
+ * A [ReportVerifier] may be supplied, and when it is, a signature that *fails* adds
+ * `SRV_REPORT_SIGNATURE_INVALID` to the evidence being scored. A signature that succeeds adds
+ * nothing, and is indistinguishable downstream from a report that carried no signature at all
+ * — [ReportVerifier.signalsFrom] returns an empty list for both, so there is no branch here
+ * that could reward one.
+ *
+ * The evidence in a badly-signed report is still scored. Letting a broken signature suppress
+ * signals would hand a compromised device an escape from `COMPROMISED`: corrupt the signature,
+ * lose the accusation. See ADR-0011 §2.
  */
 class VerificationService(
     private val challenges: ChallengeStore,
     private val scorer: RiskScorer,
     private val decisionPolicy: DecisionPolicy,
-    private val clock: ServerClock
+    private val clock: ServerClock,
+    /**
+     * Null when this deployment has no key enrollment, in which case envelopes are not
+     * checked at all.
+     *
+     * Not checking is a safe default in the only sense that matters here: it can fail to
+     * incriminate, and it can never exonerate. The opposite default — verifying against an
+     * empty key registry — would raise `SRV_REPORT_SIGNATURE_INVALID` against every honest
+     * host that had not enrolled yet.
+     */
+    private val verifier: ReportVerifier? = null
 ) {
 
     fun issueChallenge(sessionId: String, purpose: ChallengePurpose = ChallengePurpose.ORDINARY_USE): Challenge =
@@ -70,7 +89,7 @@ class VerificationService(
             )
         }
         val challenge = redemption.challenge
-        val (state, reason) = assess(submission)
+        val (state, reason) = assess(submission, verifier?.check(submission.envelope))
         return Decision(
             deviceState = state,
             reason = reason,
@@ -92,11 +111,21 @@ class VerificationService(
         return granted.coerceAtMost(requested.coerceAtLeast(0L))
     }
 
-    private fun assess(submission: ReportSubmission): Pair<DeviceState, DecisionReason> {
+    private fun assess(
+        submission: ReportSubmission,
+        signatureCheck: SignatureCheck?
+    ): Pair<DeviceState, DecisionReason> {
+        // Evidence from the report and evidence about the report, scored together. The
+        // concatenation only ever grows the list: there is no path on which a signature
+        // removes a signal the client sent.
+        val signatureSignals = signatureCheck
+            ?.let { verifier?.signalsFrom(it) }
+            .orEmpty()
+
         // Full coverage, always. Not the client's number, and not a floor the client can
         // trip: the signals that arrived are scored at face value, and no coverage claim can
         // suppress them. See the class comment.
-        val scoring = scorer.score(submission.report.signals, coverage = 1.0f)
+        val scoring = scorer.score(submission.report.signals + signatureSignals, coverage = 1.0f)
         val signalsIncriminate =
             scoring.verdict == Verdict.COMPROMISED || scoring.verdict == Verdict.SUSPICIOUS
 

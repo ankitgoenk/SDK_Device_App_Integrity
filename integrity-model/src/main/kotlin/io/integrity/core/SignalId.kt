@@ -82,5 +82,25 @@ public value class SignalId(public val value: String) {
          * into [RiskScorer], where it escalates decisively.
          */
         public val ATT_APP_NOT_RECOGNISED: SignalId = SignalId("ATT_APP_NOT_RECOGNISED")
+
+        // --- SERVER-SIDE VERIFICATION (phase 7) --------------------------------------
+
+        /**
+         * A report presented a `keyId` and a signature that did not verify against the key
+         * enrolled for it.
+         *
+         * Server-side vocabulary, and the first one this project actually emits:
+         * `sample-backend` raises it during verification, no detector on the device can.
+         *
+         * **Raised for failing verification, never for the absence of a signature.** An
+         * unsigned report is an integration that has not adopted signing, not an attack, and
+         * a signal that fired on it would be noise everywhere it matters least. See ADR-0011.
+         *
+         * Deliberately absent from [RiskScorer.DECISIVE_SIGNALS]. It is real evidence, but
+         * key rotation, a restored backup and a cleared Keystore all produce it on ordinary
+         * devices, and hard rule 6 ships it at `INFORMATIONAL` until shadow-mode data says
+         * otherwise.
+         */
+        public val SRV_REPORT_SIGNATURE_INVALID: SignalId = SignalId("SRV_REPORT_SIGNATURE_INVALID")
     }
 }

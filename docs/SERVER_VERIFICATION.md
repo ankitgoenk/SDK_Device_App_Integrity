@@ -47,15 +47,72 @@ covered by round-trip tests; changing it is a schema-version bump.
 
 ### Signing
 
-- **Preferred:** ECDSA P-256 with a key generated in the **Android Keystore**, hardware-backed
-  where available, with **key attestation** so the backend can verify the key really lives in
-  a TEE/StrongBox. This makes signature forgery expensive even on a rooted device.
-- **Fallback (no Keystore attestation):** HMAC-SHA256 with a key derived in native code from
-  the build baseline. Weaker — it is extractable by a determined attacker — but it stops
-  replayed and hand-crafted reports.
-- The signature covers: canonical report bytes ‖ nonce ‖ package name ‖ sdk version.
-- `keyId` lets the backend rotate and distinguish attestation-backed from fallback keys, and
-  score them differently.
+**Implemented.** The scheme below is [ADR-0011](adr/0011-report-signing-without-attestation.md);
+it replaces an earlier one described here that ADR-0008 had already made unbuildable. That
+earlier text is worth knowing about, because both of its options failed:
+
+- Its *preferred* scheme was ECDSA P-256 with **Keystore key attestation**, so the backend
+  could confirm the key lived in a TEE. That is attestation, which ADR-0008 removed from this
+  project, and it is an input that would raise confidence in a device, which hard rule 9
+  forbids. Remove the attestation and the scheme proves nothing either: the public key then
+  arrives self-reported, so anyone can mint a keypair, sign whatever they like, and verify
+  perfectly.
+- Its *fallback* was HMAC-SHA256 keyed from the build baseline — one secret, identical in
+  every install. Extracted once from any APK it forges reports for every user permanently,
+  and nothing distinguishes a forgery from the real thing.
+
+What ships instead:
+
+- **ECDSA P-256, non-exportable, in the Android Keystore.** Hardware-backed where the device
+  offers it, and nothing checks whether it is — that check is the attestation we do not do.
+- **The public key is enrolled over the integrator's own authenticated channel**, the same
+  session that carries `sessionId`. Identity comes from their authentication, not from ours.
+- **The signature covers the envelope header and the canonical report together**, in the
+  compact form `IGS1.<b64url(header)>.<b64url(report)>.<b64url(signature)>`. The nonce is not
+  repeated in the header: `challenge` is already inside the report, and a second copy is a
+  second thing that can disagree.
+- `keyId` is a digest of the public key, derived rather than stored, so it cannot drift from
+  the key it names.
+
+**Verification runs over the bytes received, and parsing happens afterwards.** Parsing first
+and re-serialising to check the signature would make every difference between
+`ReportWireParser` and `ReportWire` a bypass, silently, for as long as the two agreed.
+
+#### A valid signature is worth nothing, and that is the point
+
+The rule that governs the whole feature, and the one a reasonable implementation gets
+backwards:
+
+| Case | Effect on the finding |
+| --- | --- |
+| No signature | none — an unfinished integration is not an attack |
+| Valid signature | **none** — byte-identical to the unsigned case, and a test pins it |
+| Invalid signature | emits `SRV_REPORT_SIGNATURE_INVALID`, which can only move toward `COMPROMISED` |
+
+**Evidence in a badly-signed report is still scored.** If a broken signature discarded the
+report, a compromised device would corrupt its own signature to shed a `COMPROMISED` finding
+— verification would become the exoneration channel ADR-0007 closed, triggered by breaking
+it. `tools/mutate-backend.py` carries five mutants for this, including that one.
+
+**What it does not buy:** nothing here defeats a rooted device, which asks the Keystore to
+sign a fabricated report and gets a perfect signature; and nothing here touches the ADR-0007
+hole, where a client suppresses every signal and correctly signs the empty result. Signing
+addresses forgery, not silence.
+
+#### Where each half is covered
+
+`KeystoreReportSigner` has **no unit tests and can have none** — `AndroidKeyStore` is a device
+provider. `KeystoreReportSignerInstrumentedTest` covers it on-device instead, and verifies
+signatures with plain JCE rather than through `ReportVerifier`, so an independent oracle
+cannot agree with the signer by sharing its bug. It asserts the property the scheme rests on
+directly: the private key's `getEncoded()` returns null.
+
+Every positive there is paired with the tamper that must fail — a spliced payload, a spliced
+header, a signature checked under the wrong key. The tampers substitute legitimately encoded
+parts rather than editing base64 characters, because an edited character can land on a
+non-canonical trailing group that `Base64Url` rejects, which would make the envelope fail to
+parse and silently skip the control. Neutering the test's own oracle to a constant `true`
+fails exactly those three assertions, which is how they are known to be live.
 
 ### Freshness and replay
 
@@ -146,6 +203,8 @@ as the gate.
 | 5 | Sensitive actions need an action-bound decision | `ChallengePurpose.satisfies`, plus a mutant that must die |
 | 6 | A client cannot extend backend freshness, only shorten it | `windowFor` uses `coerceAtMost`; extend, shorten and negative cases all tested |
 | 7 | `tsc --noEmit` over the TypeScript contract | **Not enforced.** The bridge is unbuilt; do not describe it as verified |
+| 8 | A valid signature cannot improve a finding | `ReportVerifierTest` — a signed and an unsigned submission carrying the same signals produce identical findings; two mutants in `tools/mutate-backend.py` |
+| 9 | A failed signature cannot suppress evidence | `ReportVerifierTest` — a report with a forged signature still scores `COMPROMISED` on its own signals; one mutant |
 
 Items 1–6 are additionally covered by `tools/mutate-backend.py`, which breaks each guard in
 turn and requires every mutant to be caught. That job runs on every commit and refuses to

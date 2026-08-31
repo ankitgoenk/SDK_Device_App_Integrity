@@ -19,6 +19,7 @@ BACKEND = "sample-backend/src/main/kotlin/io/integrity/sample/backend"
 STORE = f"{BACKEND}/InMemoryChallengeStore.kt"
 SERVICE = f"{BACKEND}/VerificationService.kt"
 POLICY = f"{BACKEND}/DecisionPolicy.kt"
+SIGNATURE = f"{BACKEND}/SignatureVerification.kt"
 TEST_CMD = os.environ.get("TEST_CMD", "./gradlew :sample-backend:test")
 
 # (source file, description, exact text to replace, replacement)
@@ -55,6 +56,31 @@ MUTANTS = [
      "const val DEFAULT_TTL_MILLIS: Long = 120_000L",
      "const val DEFAULT_TTL_MILLIS: Long = 1_800_000L"),
 
+    # --- report signing (ADR-0011) ---
+    # Each of these is a way of writing signature verification that looks correct and
+    # reintroduces the asymmetry hole underneath it.
+    (SERVICE, "a failed signature suppresses the evidence that arrived with it",
+     "scorer.score(submission.report.signals + signatureSignals, coverage = 1.0f)",
+     "scorer.score(signatureSignals, coverage = 1.0f)"),
+    (SIGNATURE, "a valid signature becomes distinguishable from an unsigned one",
+     "is SignatureCheck.Unsigned, is SignatureCheck.Valid -> emptyList()",
+     "is SignatureCheck.Unsigned -> emptyList()\n        is SignatureCheck.Valid -> listOf(\n"
+     "            Signal(\n"
+     "                id = SignalId.SRV_REPORT_SIGNATURE_INVALID,\n"
+     "                category = Category.APP_TAMPER,\n"
+     "                confidence = Confidence.POSSIBLE\n"
+     "            )\n"
+     "        )"),
+    (SIGNATURE, "verification result inverted",
+     "return if (verified) {",
+     "return if (!verified) {"),
+    (SIGNATURE, "an absent signature is treated as a failed one",
+     "if (envelope == null) return SignatureCheck.Unsigned",
+     "if (envelope == null) return SignatureCheck.Invalid(InvalidReason.MALFORMED_ENVELOPE, null)"),
+    (SIGNATURE, "an unenrolled key id is accepted instead of reported",
+     "?: return SignatureCheck.Invalid(InvalidReason.UNKNOWN_KEY_ID, parsed.canonicalReportJson)",
+     "?: return SignatureCheck.Valid(parsed.header.keyId, parsed.canonicalReportJson)"),
+
     (STORE, "single use rewritten as a non-atomic read then write",
      "!entry.spent.compareAndSet(false, true) -> RedemptionFailure.ALREADY_REDEEMED",
      "!entry.spent.get().also { entry.spent.set(true) }.let { !it } -> RedemptionFailure.ALREADY_REDEEMED"),
@@ -79,8 +105,8 @@ MUTANTS = [
      "return granted.coerceAtMost(requested.coerceAtLeast(0L))",
      "return requested.coerceAtLeast(0L)"),
     (SERVICE, "client coverage claim gates the scoring",
-     "scorer.score(submission.report.signals, coverage = 1.0f)",
-     "scorer.score(submission.report.signals, "
+     "scorer.score(submission.report.signals + signatureSignals, coverage = 1.0f)",
+     "scorer.score(submission.report.signals + signatureSignals, "
      "(submission.report.clientAdvisory?.coveragePermille ?: 0) / 1000f)"),
     (SERVICE, "a rejected challenge still yields a decision window",
      "                expiresAtMillis = clock.nowMillis()\n            )",

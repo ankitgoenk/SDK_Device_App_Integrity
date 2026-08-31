@@ -129,6 +129,16 @@ a `SignalId` constant today, because it is the one the scorer names in `DECISIVE
 | `ATT_APP_ACCESS_RISK` | `environmentDetails.appAccessRiskVerdict` reports capturing/controlling apps | SRV | H | low | Google's own view of overlay/a11y/screen-capture risk — prefer over client heuristics where available |
 | `ATT_UNEVALUATED` | Token unavailable, Play Services missing, or verification failed | SRV | M | med | Treat "unevaluated" as risk, not as clean — but expect it in non-GMS markets |
 
+## 6b. Report verification (server-side, and this one is ours)
+
+Unlike §6, **this project does emit the signal below.** It is produced by `sample-backend`
+while verifying a submission, not by any detector on the device, which is why it has no
+technique column and no false-positive story that a device could cause.
+
+| SignalId | Source | Layer | Weight | FP | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `SRV_REPORT_SIGNATURE_INVALID` | **Implemented (SRV, phase 7).** A submission carried a `keyId` and a signature that did not verify against the public key enrolled for that key id, over the exact bytes received | SRV | M | **high** | Raised only for a signature that *fails*, never for one that is absent — an unsigned report is an unfinished integration, not an attack (ADR-0011). Bypass is trivial and expected: an attacker who can forge reports simply omits the signature, which is why this is evidence of a mismatch rather than a root check. FP risk is high and structural — key rotation, restored backups, a Keystore cleared by a lock-screen change and factory resets all produce it on honest devices, so it stays out of `DECISIVE_SIGNALS` |
+
 ## 7. Meta signals
 
 | SignalId | Meaning |

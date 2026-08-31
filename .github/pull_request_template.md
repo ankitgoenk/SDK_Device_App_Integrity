@@ -30,4 +30,9 @@ Signal → Evidence → Expected result → Unit test → Instrumented test → 
 - [ ] No new runtime dependency in `integrity-core`
 - [ ] No restricted API usage (`docs/PRIVACY_AND_COMPLIANCE.md` §1) and no PII in evidence
 - [ ] No main-thread IO; per-detector budget respected; cancellation-aware
-- [ ] `./gradlew build detekt ktlintCheck apiCheck` passes locally
+- [ ] Passes locally: `./gradlew assemble testDebugUnitTest test lint`,
+      `./gradlew detekt ktlintCheck --no-configuration-cache`, `./gradlew apiCheck`,
+      `tools/check-signal-catalog.py`, `tools/check-doc-drift.py`
+      <!-- Not `./gradlew build`: that task graph includes ktlint, which is not
+           configuration-cache compatible, so it runs everything and then fails while
+           storing the cache entry. CI runs the commands above instead. -->

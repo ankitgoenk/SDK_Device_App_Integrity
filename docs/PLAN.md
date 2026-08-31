@@ -224,13 +224,17 @@ zygote).
 - **Exit:** AVD, Genymotion, redroid and a Parallel-Space-style clone all detected; work
   profile and legitimate multi-user do **not** trigger `VIRT_*`.
 
-### Phase 7 — Server verification *(1.5 weeks)* — **IN PROGRESS**
+### Phase 7 — Server verification *(1.5 weeks)* — **DONE**
 - **No attestation.** ADR-0008 removed it from this project's scope: the integrator already
   runs Play Integrity end to end and combines its result with our finding. The `ATT_*` signals
   stay in the vocabulary as `SRV` — the identifiers under which an integrator feeds their own
   attestation verdict into `RiskScorer`, never produced by a detector here.
-- Report signing: HMAC/ECDSA over the canonicalised report + server nonce, key material
-  derived in native code; replay and clock-skew protection.
+- Report signing: ECDSA P-256 over the canonical report and its envelope header, with a
+  non-exportable Android Keystore key enrolled through the integrator's authenticated
+  channel; replay and clock-skew protection. (This bullet used to read "HMAC/ECDSA … key
+  material derived in native code", which ADR-0011 had to discard: a key derived in every
+  build is one global secret, and the ECDSA variant it was paired with rested on key
+  attestation that ADR-0008 put out of scope.)
 - `sample-backend`: nonce issuance, single-use redemption, and server-side re-scoring that
   reports what the evidence supports.
 - **Exit:** end-to-end demo — tampered client's report is rejected server-side.
@@ -248,7 +252,30 @@ zygote).
 > is what keeps a sensitive action able to demand an action-bound decision. The correlation
 > itself lives outside this repository and cannot be tested here.
 >
-> **Left in this phase:** report signing, and parsing the canonical wire form server-side.
+> **Report signing and canonical parsing landed together** (ADR-0011), and in that order for
+> a reason: the backend verifies over the bytes it received and parses them afterwards, so
+> writing the parser first and verifying a re-serialisation would have been a bypass for every
+> input the two halves rendered differently.
+>
+> The scheme is ECDSA P-256 in the Android Keystore with the public key enrolled over the
+> integrator's authenticated channel. The design this file and `SERVER_VERIFICATION.md`
+> previously described — Keystore **key attestation**, with an HMAC fallback — turned out to be
+> unbuildable after ADR-0008: the first is attestation, and the second is one global secret per
+> build. Both are written up in ADR-0011 rather than quietly dropped.
+>
+> The rule that governs it: a valid signature changes **nothing**, an absent one changes
+> nothing, and only a *failed* one is evidence. Anything else lets a compromised device shed a
+> `COMPROMISED` finding by corrupting its own signature.
+>
+> `KeystoreReportSigner` is covered by `integrity-core`'s first instrumented test, since
+> `AndroidKeyStore` does not exist in a JVM test. `integrity-core` is now named in
+> `tools/check-instrumented-coverage.py`'s expectations, so deleting that test fails CI rather
+> than quietly reducing the module to zero on-device coverage.
+>
+> **Left in this phase:** nothing. Phase 7's exit condition — a tampered client's report is
+> rejected server-side — is met for forgery; it is *not* met for a rooted client that signs
+> honestly and reports dishonestly, which no signature can address and which ADR-0007 already
+> said this project cannot fix.
 
 ### Phase 8 — Self-protection & hardening *(1 week)*
 See [ANTI_TAMPER.md](ANTI_TAMPER.md). R8 rules, string/constant obfuscation, control-flow
@@ -294,6 +321,10 @@ worth building.
 
 So the gate is not "signing comes third in the roadmap", it is a precondition on promotion:
 **no weight may exceed `INFORMATIONAL` until report signing is implemented and verified.**
+
+**Status: satisfied.** ADR-0011 shipped signing and server-side verification, with the
+suite pinning that a valid signature cannot improve a finding and a failed one cannot suppress
+evidence. Gate 2 below is untouched and remains the harder of the two.
 
 State its limit precisely wherever it ships, because the obvious reading is too generous:
 signing defends against SDK **removal**, not SDK **subversion**. A patched client that still
@@ -408,9 +439,9 @@ verified on a real runtime, not merely built.
       a `SignalId` exists in code with no catalog entry)
 
 ### Phase 7–8
-- [ ] Canonical report serialisation (stable, versioned) + signing — **gates all weight promotion**
+- [x] Canonical report serialisation (stable, versioned) + signing — **gates all weight promotion**
 - [ ] Nonce protocol and replay window
-- [ ] `sample-backend` parsing the canonical wire form and verifying report signatures
+- [x] `sample-backend` parsing the canonical wire form and verifying report signatures
 - [ ] Consumer R8 rules; obfuscation build step; hardening review
 
 ### Phase 9–11
