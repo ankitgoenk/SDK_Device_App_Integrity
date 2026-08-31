@@ -131,16 +131,59 @@ Not a detector; evidence for a decision already taken.
 
 ---
 
+---
+
+## 5. ENV
+
+Measured with a temporary in-app probe using the real app APIs, then removed. `adb shell` cannot
+answer these: most are `Settings` and framework calls whose permission checks differ entirely
+from a file read, and shell is more privileged besides.
+
+| SignalId | Outcome | Evidence | Stack |
+| --- | --- | --- | --- |
+| `ENV_ADB_ENABLED` | **BUILD** | `Settings.Global.ADB_ENABLED` and `DEVELOPMENT_SETTINGS_ENABLED` read without permission; both return `1` on both devices. Note both are developer devices — this discriminates nothing here, and its false-positive population is *every developer* | K1, C1 |
+| `ENV_ADB_OVER_NETWORK` | **BUILD** | `android.os.SystemProperties.get` **is reachable by reflection** on API 33 and API 36 — returned empty (property unset), not denied. Control constructible by enabling wireless debugging | K1, C1 |
+| `ENV_USER_CA_INSTALLED` | **BUILD** | `KeyStore("AndroidCAStore")` enumerates: 143 aliases on `K1`, 129 on `C1`, `user:` count **0** on both. Correct negative; control constructible by installing a user CA | K1, C1 |
+| `ENV_PROXY_CONFIGURED` | **BUILD** | `System.getProperty("http.proxyHost")` readable, `none` on both | K1, C1 |
+| `ENV_ACCESSIBILITY_SERVICE` | **BUILD** | `Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES` read succeeded (null — none enabled on either device). Control constructible by enabling TalkBack | K1, C1 |
+| `ENV_FRIDA_SERVER_DROP` | **BUILD** (technique redefined) | **As specified it cannot work**: `/data/local/tmp` exists but `listFiles()` returns null, so pattern-matching an enumeration is impossible. A *fixed-name* probe does work, proven with a real positive control — an empty `frida-server` was planted as root, `File(...).exists()` returned it, and it was removed. The detector must probe a curated name list, and inherits that list's staleness | K1 |
+| `ENV_SCREEN_CAPTURE_ACTIVE` | **BUILD** (API 34+) | `Activity.registerScreenCaptureCallback` present on `K1` (API 36), **absent** on `C1` (API 33). Below 34 there is no supported detection; the signal must report `INCONCLUSIVE` rather than absent | K1, C1 |
+| `ENV_VPN_ACTIVE` | **DEFER** (permission cost) | `NetworkInterface.getNetworkInterfaces()` returns **null** to an app with no permission — the enumeration route does not work. `ConnectivityManager`/`TRANSPORT_VPN` needs `ACCESS_NETWORK_STATE`, which the SDK would impose on every host. Defer until that trade is a decision someone takes deliberately | K1, C1 |
+| `ENV_UNKNOWN_SOURCES` | **DECLINE** (permission cost) | `canRequestPackageInstalls()` throws `SecurityException` unless the caller declares `REQUEST_INSTALL_PACKAGES` — a **Play-restricted permission**. An integrity SDK demanding it is the same non-starter as `QUERY_ALL_PACKAGES` (ADR-0004), and for the same reason | K1, C1 |
+| `ENV_OVERLAY_DETECTED` | **DOCUMENT** (host integration, not a detector) | `MotionEvent.FLAG_WINDOW_IS_OBSCURED` is delivered to *the host's own views* during touch. The SDK has no window and receives no events, so this cannot be a passive detector. It is guidance for the host — set `filterTouchesWhenObscured` on sensitive views — and at most an API for the host to report into | — |
+| `ENV_PLAY_PROTECT_OFF` | **DOCUMENT** (`SRV`) | The catalogue sources it from Play Integrity `environmentDetails.playProtectVerdict`. Server-side vocabulary like `ATT_*`; nothing here emits it, and the local `package_verifier_enable` key read back null on both devices | K1, C1 |
+| `ENV_PATCHER_APP`, `ENV_MEMORY_EDITOR`, `ENV_MITM_PROXY_APP`, `ENV_CLONER_APP`, `ENV_HOOK_MANAGER_APP` | **BUILD** | Package visibility — see §2. One mechanism, one answer, five entries | K1, C1 |
+
+### What the ENV branch says
+
+Sixteen entries. Eight are straightforwardly buildable and cheap — a better hit-rate than ROOT,
+because these are *environment* facts the platform is willing to tell an app about rather than
+privileged state it actively hides.
+
+Two findings generalise beyond ENV.
+
+**`android.os.SystemProperties` is reachable by reflection** on both API 33 and API 36. That is
+the mechanism `ROOT_VERIFIED_BOOT` needs, and it confirms property reads are app-observable in
+general — while remaining trivially spoofable, as `K1` demonstrates.
+
+**Permission cost is a triage axis the outcomes above did not have.** Two ENV candidates are
+perfectly observable and still fail, because reaching them means the SDK forcing a permission
+onto every host: `ACCESS_NETWORK_STATE` for VPN, and `REQUEST_INSTALL_PACKAGES` — Play-restricted
+— for unknown sources. ADR-0004 already made this judgement once, for `QUERY_ALL_PACKAGES`. A
+signal an SDK cannot obtain without making its integrator's app more privileged is not free, and
+the cost lands on someone who never asked for the signal.
+
 ## Standing count
 
-| | ROOT | Package-visibility | HOOK | Total triaged |
-| --- | --- | --- | --- | --- |
-| BUILT | 3 | (1 of the 6) | 1 | 5 |
-| BUILD | 2 | 5 | — | 7 |
-| DEFER | 2 | — | — | 2 |
-| DOCUMENT | 6 | — | 1 | 7 |
-| DUPLICATE | — | — | 1 | 1 |
-| DECLINE | 1 | — | — | 1 |
+| | ROOT | Package-visibility | HOOK | ENV | Total |
+| --- | --- | --- | --- | --- | --- |
+| BUILT | 3 | (1 of the 6) | 1 | — | 5 |
+| BUILD | 2 | 5 | — | 6 | 13 |
+| DEFER | 2 | — | — | 1 | 3 |
+| DOCUMENT | 6 | — | 1 | 2 | 9 |
+| DUPLICATE | — | — | 1 | — | 1 |
+| DECLINE | 1 | — | — | 1 | 2 |
 
-**23 of 82 candidates triaged.** `ENV` (settings-based), `EMU`, `VIRT`, `APP` and the remaining
-`HOOK` entries are untouched.
+**33 of 82 candidates triaged.** `EMU`, `VIRT`, `APP` and the remaining `HOOK` entries are
+untouched. `EMU`/`VIRT` will need a third reference stack — neither reference device is an
+emulator or a cloned container.
