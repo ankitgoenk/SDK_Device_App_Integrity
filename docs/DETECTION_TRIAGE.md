@@ -12,6 +12,9 @@ value is not "we implemented N detectors". It is:
 > we evaluated every candidate technique, and can show which are observable, which are worth
 > building, and **why the rest are not** — so the same idea is not re-proposed every quarter.
 
+**Status: 73 of 82 triaged.** The nine outstanding are `EMU` and `VIRT`, which cannot be settled
+on the current hardware and are marked as such rather than guessed.
+
 ## Outcomes
 
 | Outcome | Meaning |
@@ -231,27 +234,109 @@ disables first. The techniques with real teeth against `K1`'s stack are the nati
 they share `HOOK_SELF_TEXT_MISMATCH`'s bypass: hook the reading path and every one of them sees
 the original bytes.
 
+---
+
+## 8. ATT — vocabulary, not detectors
+
+All six are **DOCUMENT**, and the reason is settled rather than measured:
+[ADR-0008](adr/0008-attestation-out-of-scope.md) put attestation outside this project. Nothing
+here emits an `ATT_*` signal and nothing should. They are the identifiers an *integrator* uses to
+feed their own Play Integrity verdicts into `RiskScorer`.
+
+| SignalId | Outcome | Notes |
+| --- | --- | --- |
+| `ATT_APP_NOT_RECOGNISED` | **DOCUMENT** | The only one that exists as a `SignalId` constant, and the only one in `RiskScorer.DECISIVE_SIGNALS`, where a `CONFIRMED` instance escalates to `COMPROMISED` |
+| `ATT_DEVICE_INTEGRITY_FAIL` | **DOCUMENT** | Catalogue-only; no constant |
+| `ATT_BASIC_INTEGRITY_FAIL` | **DOCUMENT** | Catalogue-only; no constant |
+| `ATT_VIRTUAL_ONLY` | **DOCUMENT** | Catalogue-only; no constant |
+| `ATT_APP_ACCESS_RISK` | **DOCUMENT** | Catalogue-only; no constant |
+| `ATT_UNEVALUATED` | **DOCUMENT** | Catalogue-only; no constant |
+
+### The missing constants are not the gap
+
+`SignalId` is `public value class SignalId(public val value: String)` and
+`Policy.withWeight(id, weight)` accepts any id, so an integrator can already write
+`SignalId("ATT_DEVICE_INTEGRITY_FAIL")` and weight it. The vocabulary works today. Adding
+constants would be convenience, and would also drag five ids into the catalogue gate for signals
+this project never emits.
+
+**The actual gap is that the integration path is untested.** `RiskScorerTest` exercises exactly
+one id — `ATT_APP_NOT_RECOGNISED` — and no test drives an integrator-supplied attestation verdict
+end to end. An integrator following the documentation gets a signal weighted `INFORMATIONAL`
+unless they also call `withWeight`, and nothing in the suite would notice if that path broke.
+One test, not five constants.
+
+### The caveat that matters more than any of the above
+
+**On a device running attestation forgery, an `ATT_*` input is not more trustworthy than our own
+signals.** `K1` runs `tricky_store` with 354 targets including `com.android.vending`,
+`com.google.android.gms` and the key-attestation checker app (§4).
+
+Direction is what keeps this safe. Used to **incriminate** — the way `ATT_APP_NOT_RECOGNISED`
+escalates — a forged verdict costs the attacker nothing they wanted and gains them nothing.
+Used to **exonerate**, it is precisely what `tricky_store` exists to produce. ADR-0007 already
+forbids the second, and this device is why that rule is not theoretical.
+
+---
+
+## 9. META — the SDK reporting on itself
+
+All seven are **BUILT**, and each is emitted and tested. Verified rather than assumed, because
+this family had a documented-but-absent member until recently:
+
+| SignalId | Emitted by | Tests |
+| --- | --- | --- |
+| `META_DETECTOR_TIMEOUT` | `DetectionEngine` | 2 |
+| `META_DETECTOR_ERROR` | `DetectionEngine` | 1 |
+| `META_NATIVE_UNAVAILABLE` | `NativeIntegrityDetector`, escalated in `RiskScorer` | 4 |
+| `META_NATIVE_NOT_CONFIGURED` | `NativeIntegrityDetector` | 1 |
+| `META_NATIVE_FAILED` | `NativeIntegrityDetector` | 2 |
+| `META_CONFIG_INVALID` | `IntegrityGuard` | 1 |
+| `META_VISIBILITY_RESTRICTED` | `RootManagerPackageDetector` | 1 |
+
+`META_VISIBILITY_RESTRICTED` is the cautionary one: ADR-0004, `INTEGRATION.md`, the catalogue and
+the `<queries>` manifest comment all stated the report carried it, while the id did not exist and
+nothing emitted it. It was implemented only after someone checked. The table above is that check,
+run against the other six.
+
+None of the seven fired on either reference device — no detector timed out, threw, or failed —
+except `META_VISIBILITY_RESTRICTED`, which fires on `C1` and on every API 30+ device without a
+root manager installed. That breadth is a known consequence of `absenceIsConclusive`, recorded in
+the catalogue row.
+
 ## Standing count
 
 Per family, so each column sums to the family's catalogue size and a miscount is visible.
 
-| | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | Total (60) |
-| --- | --- | --- | --- | --- | --- |
-| BUILT | 3 | — | 1 | 2 | **6** |
-| BUILD | 2 | 12 | 13 | 7 | **34** |
-| DEFER | 2 | 1 | 1 | — | **4** |
-| DOCUMENT | 6 | 2 | 1 | 1 | **10** |
-| DUPLICATE | — | — | 1 | — | **1** |
-| DECLINE | 1 | 1 | 3 | — | **5** |
+| | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | ATT (6) | META (7) | Total (73) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| BUILT | 3 | — | 1 | 2 | — | 7 | **13** |
+| BUILD | 2 | 12 | 13 | 7 | — | — | **34** |
+| DEFER | 2 | 1 | 1 | — | — | — | **4** |
+| DOCUMENT | 6 | 2 | 1 | 1 | 6 | — | **16** |
+| DUPLICATE | — | — | 1 | — | — | — | **1** |
+| DECLINE | 1 | 1 | 3 | — | — | — | **5** |
 
-*(An earlier revision of this table carried a separate "package-visibility" column, which
-double-counted five `ENV_*` entries against their own family and undercounted ENV's BUILD row by
-one. Per-family columns are self-checking; that one was not.)*
+**73 of 82 candidates triaged. The census is closed except for `EMU` (5) and `VIRT` (4).**
 
-**60 of 82 candidates triaged.** Remaining: `EMU` (5), `VIRT` (4), `ATT` (6), `META` (7).
-
-`EMU` and `VIRT` **cannot be triaged on the current hardware** — neither reference device is an
+Those nine **cannot be triaged on the current hardware** — neither reference device is an
 emulator or a cloned container, so every verdict would be an assumption, which is the failure
 this document exists to prevent. They need a third stack: an AVD is free, and a Parallel
-Space-style clone of `sample-app` is nearly free. `ATT` is server-side vocabulary by ADR-0008 and
-`META` is the SDK reporting on itself; both are triageable without new hardware.
+Space-style clone of `sample-app` is nearly free.
+
+### What the closed census says
+
+Of 73 candidates, **13 are built** and **34 more are buildable**. But the 34 is a backlog, not
+capability, and the distribution is the point:
+
+- **ROOT is exhausted at 3.** Six of its fourteen are not observable by an app at all, and no
+  remaining candidate would add a second detection on `K1` — `ROOT_VERIFIED_BOOT` reads `green`
+  there, `ROOT_MOUNT_ANOMALY` inverts, the rest are clean readings.
+- **HOOK's 13 flatters it.** The cheap ones are debugger and environment checks an attacker
+  disables first; the four with teeth share one bypass — hook the reading path and every one of
+  them measures the original bytes.
+- **APP is where the unblocked value is**, and two of its seven wait on
+  `integrity-baseline-plugin` rather than on any platform limit. That plugin unblocks
+  `APP_DEX_DIGEST_MISMATCH` and `APP_RESOURCE_TAMPER` together, and gives the SDK the one thing
+  it currently cannot do: notice that *the app itself* changed — which, unlike everything in
+  ROOT, a rooted device does not automatically defeat.
