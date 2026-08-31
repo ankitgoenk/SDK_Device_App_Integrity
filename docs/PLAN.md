@@ -222,11 +222,11 @@ world-writable paths, debuggable flag.
 > **Left in this phase**, and none of it is blocked on the plugin:
 > - `APP_DEX_DIGEST_MISMATCH` has no client half yet. It cannot be a local comparison for the
 >   reason above; it is a *measurement* the client reports and the backend compares.
-> - The AGP variant wiring **compiles but has never run**: `integrity-baseline-plugin` is a
->   project in this build, not an included build, so nothing here can apply it. A TestKit
->   functional test against a synthetic Android project is the honest way to close that, and
->   until it exists the wiring is unverified. The digesting, which is the part that can be
->   wrong, is unit-tested and was run against a real APK.
+> - The AGP variant wiring is **verified by a TestKit functional test** that builds a synthetic
+>   Android application and asserts the per-variant tasks exist and a baseline is written from
+>   the real APK. It was unverified when the plugin first landed, and the test earned its keep
+>   immediately: run against the previous stub it failed all three ways, which is the
+>   fails-before-the-implementation-exists property stated rather than hoped for.
 > - Signing-cert pins and the native string vault remain in the extension as configuration the
 >   task does not yet consume.
 
