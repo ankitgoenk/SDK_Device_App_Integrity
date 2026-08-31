@@ -122,8 +122,12 @@ class BaselineComputerTest {
             nativeLibs = emptyMap()
         ).toJson()
 
+        // Keys lexicographically sorted, and the aggregate is the shared DexAggregate value —
+        // the same construction the client runs, so build and device cannot disagree.
+        val aggregate = io.integrity.core.DexAggregate.of(mapOf("classes.dex" to "aa", "classes2.dex" to "bb"))
         assertThat(json).isEqualTo(
-            """{"dex":{"classes.dex":"aa","classes2.dex":"bb"},"nativeLibs":{},"packageName":"p"}"""
+            """{"dex":{"classes.dex":"aa","classes2.dex":"bb"},""" +
+                """"dexAggregate":"$aggregate","nativeLibs":{},"packageName":"p"}"""
         )
     }
 }

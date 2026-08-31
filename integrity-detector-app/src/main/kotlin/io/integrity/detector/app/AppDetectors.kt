@@ -20,7 +20,8 @@ public object AppDetectors {
     /** Every detector in this module, for [IntegrityConfig.Builder.detectors]. */
     @JvmStatic
     public fun all(): List<Detector> = listOf(
-        SignatureDetector()
+        SignatureDetector(),
+        DexDigestDetector()
     )
 
     /**
