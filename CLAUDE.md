@@ -3,11 +3,13 @@
 Android SDK for device- and app-integrity detection (root, Frida/hooking, tampering,
 hostile co-installed apps), plus the backend half that turns its evidence into a decision.
 
-**Status:** phases 0–1 complete; 2, 3 and 7 in progress. Twelve modules, a shipped native
-core, and a backend challenge-and-decision pipeline. Seven device detections are live against
-a catalogue of 68 — the other seven `SignalId`s in code are `META_*` (the SDK reporting on
-itself) and `ATT_*` (server-side vocabulary), so "14 implemented" from the catalogue gate is
-not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the current count.
+**Status:** phases 0–1 and 7 complete; 2 and 3 in progress. Twelve modules, a shipped native
+core, a backend challenge-and-decision pipeline, and signed reports verified server-side.
+Seven device detections are live against a catalogue of 68 — the other eight `SignalId`s in
+code are `META_*` (the SDK reporting on itself), `ATT_*` (server-side vocabulary we never
+emit) and `SRV_REPORT_SIGNATURE_INVALID` (server-side, and we do emit it), so "15 implemented"
+from the catalogue gate is not fifteen detections. Run `tools/check-signal-catalog.py` for the
+current count.
 
 ## Where things are
 
@@ -18,7 +20,8 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
 - `docs/adr/` — decisions that should not be relitigated without a new ADR. ADR-0006 is the
   integration contract; **ADR-0007 is the asymmetric-trust rule** that governs the backend;
   **ADR-0008 puts attestation out of scope**, which is why the backend has no `TRUSTED` state
-  and emits no access action
+  and emits no access action; **ADR-0011 applies the asymmetry to report signing** — a valid
+  signature may never improve a finding, and a failed one may never suppress evidence
 - `tools/` — the CI gates. Several of them test the other gates; see `mutate-backend.py`
 
 ## Hard rules when writing code here
@@ -32,10 +35,10 @@ not seven-plus-seven detections. Run `tools/check-signal-catalog.py` for the cur
 5. The SDK performs no network IO (ADR-0003) and never terminates the host process.
 6. New signals ship at `INFORMATIONAL` weight until shadow-mode data justifies promotion.
    Two gates block the first non-zero weight, and neither is the promoter's to waive: report
-   signing must be shipped and verified, and the reports must be joinable to authoritative
-   fraud outcomes. Promote on **precision at the operating point**, never on hit rate. The
-   join key comes from the host — adding a device identifier to the report to make the join
-   easier breaks hard rule 3. See "Weight promotion" at the end of `docs/PLAN.md` §1.
+   signing must be shipped and verified (**done** — ADR-0011), and the reports must be joinable
+   to authoritative fraud outcomes (**still open, and the harder one**). Promote on
+   **precision at the operating point**, never on hit rate. The join key comes from the host —
+   adding a device identifier to the report to make the join easier breaks hard rule 3. See "Weight promotion" at the end of `docs/PLAN.md` §1.
 7. `integrity-core` takes no third-party runtime dependency beyond coroutines and
    `androidx.annotation`.
 8. **The client may report evidence and consume a server decision. It must never treat the

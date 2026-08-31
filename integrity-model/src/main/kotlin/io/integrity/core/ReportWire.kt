@@ -44,11 +44,6 @@ public object ReportWire {
     public const val WIRE_VERSION: Int = 2
 
     private const val PER_MILLE = 1000
-    private val HEX_DIGITS = "0123456789abcdef".toCharArray()
-
-    private const val BITS_PER_NIBBLE = 4
-    private const val NIBBLES_PER_ESCAPE = 4
-    private const val NIBBLE_MASK = 0xF
 
     /**
      * The challenge is read from [report], never passed in.
@@ -111,39 +106,12 @@ public object ReportWire {
     private fun num(value: Long): String = value.toString()
 
     /**
-     * Hand-rolled hex, because `String.format` uses the default locale.
+     * Delegates to [JsonWriter], which the parser shares.
      *
-     * Caught by detekt, and it is the exact hazard this file's own header warns about two
-     * functions higher up: a canonical form must not contain a single locale-dependent
-     * rendering. Writing the nibbles directly removes the question rather than answering it
-     * with `Locale.ROOT`.
+     * This escaping used to live here. It moved when [ReportWireParser] arrived, because a
+     * writer and a reader with independent notions of what `\\u001f` means are a signature
+     * bypass waiting to be found: the bytes that verify and the bytes that are interpreted
+     * would differ by exactly their disagreement.
      */
-    private fun appendUnicodeEscape(out: StringBuilder, code: Int) {
-        out.append("\\u")
-        // Most significant nibble first, so 0x1f renders as 001f rather than f100.
-        for (position in NIBBLES_PER_ESCAPE - 1 downTo 0) {
-            out.append(HEX_DIGITS[(code shr (position * BITS_PER_NIBBLE)) and NIBBLE_MASK])
-        }
-    }
-
-    /** Minimal, deterministic JSON string escaping. */
-    private fun str(value: String): String {
-        val out = StringBuilder(value.length + 2)
-        out.append('"')
-        for (c in value) {
-            when {
-                c == '"' -> out.append("\\\"")
-                c == '\\' -> out.append("\\\\")
-                c == '\n' -> out.append("\\n")
-                c == '\r' -> out.append("\\r")
-                c == '\t' -> out.append("\\t")
-                // Everything below 0x20 must be escaped, and \\u is the only form that is
-                // unambiguous across the whole range.
-                c < ' ' -> appendUnicodeEscape(out, c.code)
-                else -> out.append(c)
-            }
-        }
-        out.append('"')
-        return out.toString()
-    }
+    private fun str(value: String): String = JsonWriter.string(value)
 }

@@ -23,3 +23,6 @@ libs/
 # Secrets — never commit signing pins or backend keys
 secrets.properties
 signing.properties
+
+# Kotlin compiler daemon session files
+.kotlin/

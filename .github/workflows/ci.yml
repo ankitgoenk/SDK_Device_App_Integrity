@@ -213,6 +213,7 @@ jobs:
         run: >-
           tools/check-instrumented-coverage.py
           integrity-native integrity-detector-root integrity-detector-app sample-app
+          integrity-core
 
       - uses: actions/upload-artifact@v4
         if: always()

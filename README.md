@@ -13,11 +13,14 @@ A modular, Kotlin-first Android SDK that answers two questions for the host app 
 The SDK produces an **evidence-based report**, not a boolean. The host app — and ideally the
 host's **backend** — decides what to do with it.
 
-> **Status:** phase 0 **closed** (six-job CI green, verified on an Android 14 emulator via both a project dependency and a published AAR); phase 1 (detection engine, scoring, policy,
-> cache) implemented and unit-tested. **No detectors yet** — every signal family lands in
-> phases 2–7, so `evaluate()` currently reports `UNKNOWN` with zero coverage on a real
-> integration. See [docs/PLAN.md](docs/PLAN.md). Detectors land in phases 2–7 and every `evaluate()` currently
-> returns `UNKNOWN`. Start with [`docs/PLAN.md`](docs/PLAN.md).
+> **Status:** phases 0, 1 and 7 are closed; phases 2 and 3 are in progress. The engine,
+> scoring, policy and cache are implemented; the native core ships; the backend issues
+> challenges, verifies signed reports and grades evidence.
+>
+> **Seven device detections are live** — three root families, two app-tamper, two from the
+> native core — out of a catalogue of 68, and **every one of them ships at `INFORMATIONAL`
+> weight** per hard rule 6, so a default-policy deployment still scores them at zero. Do not
+> read "implemented" as "enforcing". Start with [`docs/PLAN.md`](docs/PLAN.md).
 
 ---
 
@@ -88,11 +91,19 @@ lifecycleScope.launch {
 ## Building
 
 ```bash
-./gradlew build                 # assemble + unit tests + lint
-./gradlew detekt ktlintCheck    # static analysis
-./gradlew apiCheck              # public API surface is contract (apiDump to regenerate)
-tools/check-signal-catalog.py   # every SignalId must be documented in the catalog
+./gradlew assemble testDebugUnitTest test lint          # what CI builds and runs
+./gradlew detekt ktlintCheck --no-configuration-cache   # static analysis
+./gradlew apiCheck                                      # public API is contract (apiDump to regenerate)
+tools/check-signal-catalog.py                           # every SignalId must be catalogued
+tools/check-doc-drift.py                                # module tables must match settings.gradle.kts
 ```
+
+Two of those invocations look wrong and are not. `detekt ktlintCheck` needs
+`--no-configuration-cache` because the ktlint plugin (12.2.0) holds a `Project` reference and
+cannot be serialised; and there is no plain `./gradlew build` line because that task graph
+includes ktlint, so with `org.gradle.configuration-cache=true` in `gradle.properties` it runs
+every task successfully and then fails while storing the cache entry. CI runs the commands
+above rather than `build` for exactly this reason.
 
 Requires JDK 17+ and an Android SDK (`compileSdk 35`). `tools/setup-dev-env.sh` reports what
 is missing; it also runs automatically as a `SessionStart` hook in Claude Code sessions.
@@ -111,7 +122,7 @@ you set `integrity.enableNative=true`.
 | `integrity-baseline-plugin` | Gradle plugin that bakes digests and pins at build time (phase 4) |
 | `integrity-testing` | Fakes and fixtures for detector tests |
 | `sample-app` | Renders a live report |
-| `sample-backend` | Challenge issuance, single-use redemption and the evidence pipeline |
+| `sample-backend` | Challenge issuance, single-use redemption, report-signature verification and the evidence pipeline |
 
 ## Licence
 
