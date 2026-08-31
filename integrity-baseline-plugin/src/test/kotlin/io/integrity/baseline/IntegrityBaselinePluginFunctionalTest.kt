@@ -5,6 +5,7 @@ import java.io.File
 import java.util.Properties
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
+import org.junit.Assert.fail
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -32,25 +33,41 @@ class IntegrityBaselinePluginFunctionalTest {
     private lateinit var androidSdk: String
 
     /**
-     * A real Android build needs a real SDK. Where there is none the test is skipped — and
-     * says so loudly, because a silent skip is how the defect above survived in the first
-     * place. CI always has one, so a skip here is a local-environment fact, never a pass.
+     * A real Android build needs a real SDK.
+     *
+     * **In CI this fails rather than skips.** Every CI job that runs this has
+     * `android-actions/setup-android`, so a missing SDK there is a broken workflow, not an
+     * environment fact — and a skip would leave the job green while proving nothing about the
+     * wiring, which is the whole reason this test exists. Locally, where an SDK is a
+     * reasonable thing to lack, it skips and says why.
+     *
+     * The decision is [SdkRequirement], extracted so it can be tested without environment
+     * gymnastics. A guard whose own behaviour is unobservable is the thing being guarded
+     * against.
      */
     @Before
     fun requireAndroidSdk() {
+        val sdk = resolveSdk()
+        when (SdkRequirement.of(sdk, isCi = System.getenv("CI") != null)) {
+            SdkRequirement.OK -> androidSdk = sdk!!
+            SdkRequirement.FAIL_CI -> fail(
+                "no Android SDK on a CI runner: this test cannot verify the AGP wiring, and " +
+                    "skipping would leave the job green having proved nothing. Check that " +
+                    "android-actions/setup-android runs before ./gradlew test."
+            )
+            SdkRequirement.SKIP_LOCAL -> {
+                println("SKIPPED: no Android SDK locally (ANDROID_HOME or local.properties sdk.dir)")
+                assumeTrue(false)
+            }
+        }
+    }
+
+    private fun resolveSdk(): String? {
         val fromEnv = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
         val fromLocalProperties = File(rootOfThisBuild(), "local.properties")
             .takeIf { it.exists() }
             ?.let { Properties().apply { it.inputStream().use(::load) }.getProperty("sdk.dir") }
-        val sdk = fromEnv ?: fromLocalProperties
-        if (sdk == null || !File(sdk, "platforms").isDirectory) {
-            println(
-                "SKIPPED: no Android SDK (ANDROID_HOME or local.properties sdk.dir); " +
-                    "cannot run a real Android build"
-            )
-        }
-        assumeTrue(sdk != null && File(sdk, "platforms").isDirectory)
-        androidSdk = sdk!!
+        return (fromEnv ?: fromLocalProperties)?.takeIf { File(it, "platforms").isDirectory }
     }
 
     /** Walks up to the directory holding `settings.gradle.kts`, so this works from any CWD. */

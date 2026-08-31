@@ -21,6 +21,15 @@ gradlePlugin {
 // It has to be AGP's full runtime closure, not `compileClasspath`: the compile artifacts alone
 // leave AGP unable to apply its own `version-check` plugin, which needs classes from sibling
 // artifacts. A dedicated resolvable configuration is the way to ask for the whole thing.
+// A skipped test is invisible in Gradle's default output, which is how "did the functional
+// test actually run in CI?" became unanswerable from a green job's log. Naming skipped tests
+// makes the answer readable without turning on the full stdout firehose.
+tasks.named<Test>("test") {
+    testLogging {
+        events("skipped", "failed")
+    }
+}
+
 val agpForTestKit: Configuration by configurations.creating
 
 tasks.named<org.gradle.plugin.devel.tasks.PluginUnderTestMetadata>("pluginUnderTestMetadata") {
