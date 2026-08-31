@@ -173,17 +173,85 @@ onto every host: `ACCESS_NETWORK_STATE` for VPN, and `REQUEST_INSTALL_PACKAGES` 
 signal an SDK cannot obtain without making its integrator's app more privileged is not free, and
 the cost lands on someone who never asked for the signal.
 
+---
+
+## 6. APP
+
+Measured with a temporary in-app probe, then removed. These are mostly *self*-introspection, so
+the platform is generally willing — the interesting failures are elsewhere.
+
+| SignalId | Outcome | Evidence | Stack |
+| --- | --- | --- | --- |
+| `APP_SIGNATURE_MISMATCH` | **BUILT** | Ran and matched on both devices once a pin was configured. Without a pin it reports `no_pin_configured`, which was its state in every run before the baseline | K1, C1 |
+| `APP_NATIVE_LIB_MISMATCH` | **BUILT** | Build-token comparison in the native core; silent on both | K1, C1 |
+| `APP_PACKAGE_MISMATCH` | **BUILD** | `context.packageName` against the configured expectation. `IntegrityConfig.expectedPackageName` already exists and nothing reads it | K1, C1 |
+| `APP_INSTALLER_UNEXPECTED` | **BUILD** | `getInstallSourceInfo()` succeeds and returns `installingPackageName=null` on both — the adb-install case. **Both reference devices are already the positive control**: a sideloaded app is exactly what a null installer means | K1, C1 |
+| `APP_DEBUGGABLE_FLAG` | **BUILD** | `FLAG_DEBUGGABLE=true` on both, correctly, because `sample-app` is a debug build. Trivially observable; the control is a build variant | K1, C1 |
+| `APP_UNEXPECTED_DEX` | **BUILD** | Hidden-API reflection into `dalvik.system.BaseDexClassLoader.pathList` **still works** on API 33 and 36 — `dexElements=1` on both. That was the open question | K1, C1 |
+| `APP_PROCESS_NAME_ANOMALY` | **BUILD** | `/proc/self/cmdline` readable; matches the package on both | K1, C1 |
+| `APP_DEX_DIGEST_MISMATCH` | **BUILD** (blocked) | Own APK readable (10.2 MB). Observable, but needs the build-time baseline from `integrity-baseline-plugin`, which is phase 4 and unbuilt. The dependency is a plugin, not a platform limit | K1, C1 |
+| `APP_RESOURCE_TAMPER` | **BUILD** (blocked) | Same shape and the same baseline dependency | — |
+| `APP_TASK_HIJACK_RISK` | **DOCUMENT** (host posture, not a detector) | `taskAffinity` reads back fine — but it describes **the host's own manifest**, not the device. It cannot distinguish a compromised device from a badly configured app, and the fix is the host's to make. This is lint for integrators, like `ENV_OVERLAY_DETECTED` | K1, C1 |
+
+Seven of ten are buildable and two of those wait only on a plugin. APP is the healthiest branch
+in the catalogue — unsurprising, since asking a process about itself is the one thing Android
+does not restrict.
+
+---
+
+## 7. HOOK
+
+Two entries were already settled (`HOOK_SELF_TEXT_MISMATCH` BUILT, `HOOK_PLT_GOT` DUPLICATE —
+see §3). The remaining eighteen:
+
+| SignalId | Outcome | Evidence | Stack |
+| --- | --- | --- | --- |
+| `HOOK_FRIDA_MAPS` | **BUILD** | `/proc/self/maps` readable; 715 distinct paths on `K1`, 551 on `C1` | K1, C1 |
+| `HOOK_FRIDA_THREADS` | **BUILD** | `/proc/self/task` is listable and every `comm` readable — 13 threads on `K1`, 16 on `C1` | K1, C1 |
+| `HOOK_FRIDA_ARTEFACTS` | **BUILD** | Fixed-name probes into `/data/local/tmp` work; proven with a planted decoy (§5) | K1 |
+| `HOOK_FRIDA_MEMSCAN` | **BUILD** (native, costly) | Reading own executable regions is proven by `HOOK_SELF_TEXT_MISMATCH`. Scanning them for fingerprints is the same primitive at much greater cost | K1, C1 |
+| `HOOK_XPOSED_CLASSES` | **BUILD** | `Class.forName("de.robv.android.xposed.XposedBridge")` resolves or throws cleanly; absent on both. Trivially defeated — LSPosed hides itself — so a hit is evidence and a miss is nothing | K1, C1 |
+| `HOOK_XPOSED_STACK` | **BUILD** | Stack-trace inspection works; 15 frames on `K1`, 14 on `C1`, no suspicious frames | K1, C1 |
+| `HOOK_XPOSED_ARTEFACTS` | **BUILD** (partial) | `/system/framework/**` probes work and return nothing. `/data/adb/lspd` is **denied**, like every other `/data/adb` path (§1), so the modern half of this check is unavailable | K1, C1 |
+| `HOOK_ART_METHOD_ANOMALY` | **BUILD** | `Modifier.isNative` on sampled framework methods reads correctly (`false` for both probes on both devices). A Java-level hook typically flips this | K1, C1 |
+| `HOOK_INLINE_PROLOGUE` | **BUILD** (native) | Same primitive as the shipped self-text measurement, pointed at `libc`/`libart` symbols instead of our own `.text` | — |
+| `HOOK_DEBUGGER_ATTACHED` | **BUILD** | `Debug.isDebuggerConnected()` — `false` on both | K1, C1 |
+| `HOOK_TRACER_PID` | **BUILD** | `/proc/self/status` readable, `TracerPid: 0` on both. Control is constructible by attaching a debugger | K1, C1 |
+| `HOOK_JDWP_ENABLED` | **BUILD** | Reduces to the debuggable flag, already measured | K1, C1 |
+| `HOOK_LDPRELOAD` | **BUILD** | `/proc/self/environ` readable on both; no `LD_PRELOAD`/`LD_LIBRARY_PATH` present | K1, C1 |
+| `HOOK_UNEXPECTED_MODULE` | **DEFER** (allow-list is the whole problem) | A naive allow-list of `/system`, `/apex`, `/vendor`, `/data/app`, `/product` leaves **113 unexplained paths on `K1` and 28 on `C1`** — ART heap regions (`/ non moving space mark-bitmap`), `dalvik-cache` `.oat` files, and `frro`/`idmap` runtime-resource overlays. The detector is the allow-list; without a designed one this is a false-positive generator. Note the 4× gap between devices is Android 16 vs 13, **not** root | K1, C1 |
+| `HOOK_PTRACE_SELF` | **DOCUMENT** (mitigation, not a detector) | Forking a watchdog to occupy the ptrace slot *prevents* attachment. It emits no evidence and belongs in `ANTI_TAMPER.md`, not a signal catalogue | — |
+| `HOOK_FRIDA_PORT` | **DECLINE** | Connecting to `127.0.0.1:27042` throws `SocketException` without `INTERNET`. Beyond the permission, it needs an explicit ADR: **ADR-0003 says the SDK performs no network IO**, and whether a loopback probe counts is a question no one has answered. Hard rule 1 permits socket IO off the main thread, so this is genuinely undecided — and must be decided before it is built, not after | K1, C1 |
+| `HOOK_FRIDA_PORTSCAN` | **DECLINE** | Everything above, multiplied by a bounded port sweep of the user's own device | — |
+| `HOOK_SUBSTRATE` | **DECLINE** (obsolete) | Cydia Substrate has been unmaintained for years and is absent from every modern hooking stack, including the one on `K1`. Maintaining a probe for it is upkeep with no expected yield | — |
+
+Thirteen of eighteen are buildable, which makes HOOK look healthy — but note *what* is
+buildable. The cheap wins are debugger and environment checks that any competent attacker
+disables first. The techniques with real teeth against `K1`'s stack are the native ones, and
+they share `HOOK_SELF_TEXT_MISMATCH`'s bypass: hook the reading path and every one of them sees
+the original bytes.
+
 ## Standing count
 
-| | ROOT | Package-visibility | HOOK | ENV | Total |
-| --- | --- | --- | --- | --- | --- |
-| BUILT | 3 | (1 of the 6) | 1 | — | 5 |
-| BUILD | 2 | 5 | — | 6 | 13 |
-| DEFER | 2 | — | — | 1 | 3 |
-| DOCUMENT | 6 | — | 1 | 2 | 9 |
-| DUPLICATE | — | — | 1 | — | 1 |
-| DECLINE | 1 | — | — | 1 | 2 |
+Per family, so each column sums to the family's catalogue size and a miscount is visible.
 
-**33 of 82 candidates triaged.** `EMU`, `VIRT`, `APP` and the remaining `HOOK` entries are
-untouched. `EMU`/`VIRT` will need a third reference stack — neither reference device is an
-emulator or a cloned container.
+| | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | Total (60) |
+| --- | --- | --- | --- | --- | --- |
+| BUILT | 3 | — | 1 | 2 | **6** |
+| BUILD | 2 | 12 | 13 | 7 | **34** |
+| DEFER | 2 | 1 | 1 | — | **4** |
+| DOCUMENT | 6 | 2 | 1 | 1 | **10** |
+| DUPLICATE | — | — | 1 | — | **1** |
+| DECLINE | 1 | 1 | 3 | — | **5** |
+
+*(An earlier revision of this table carried a separate "package-visibility" column, which
+double-counted five `ENV_*` entries against their own family and undercounted ENV's BUILD row by
+one. Per-family columns are self-checking; that one was not.)*
+
+**60 of 82 candidates triaged.** Remaining: `EMU` (5), `VIRT` (4), `ATT` (6), `META` (7).
+
+`EMU` and `VIRT` **cannot be triaged on the current hardware** — neither reference device is an
+emulator or a cloned container, so every verdict would be an assumption, which is the failure
+this document exists to prevent. They need a third stack: an AVD is free, and a Parallel
+Space-style clone of `sample-app` is nearly free. `ATT` is server-side vocabulary by ADR-0008 and
+`META` is the SDK reporting on itself; both are triageable without new hardware.
