@@ -32,6 +32,7 @@ host's **backend** — decides what to do with it.
 | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Who the adversary is, what they can do, what this SDK can and cannot promise |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module layout, execution engine, threading, native/JVM split |
 | [docs/DETECTION_CATALOG.md](docs/DETECTION_CATALOG.md) | Every detection signal: technique, weight, false-positive risk, known bypass |
+| [docs/DETECTION_TRIAGE.md](docs/DETECTION_TRIAGE.md) | Which candidates are actually observable from an app, which are worth building, and why the rest are not |
 | [docs/RISK_SCORING.md](docs/RISK_SCORING.md) | How signals become a score and a verdict; policy configuration; FP tuning |
 | [docs/API_DESIGN.md](docs/API_DESIGN.md) | Public Kotlin/Java API surface, data model, lifecycle |
 | [docs/INTEGRATION.md](docs/INTEGRATION.md) | Host-app integration: Gradle, manifest, `<queries>`, R8, response patterns |

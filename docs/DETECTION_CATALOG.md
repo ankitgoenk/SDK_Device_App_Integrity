@@ -3,6 +3,10 @@
 Every signal the SDK can emit. Each entry has a **stable `SignalId`** — IDs are contract,
 never renamed. CI enforces that every `SignalId` in code has an entry here.
 
+> **This is a catalogue of what is conceivable, not a backlog.** Several entries describe
+> checks an unprivileged app is not permitted to make. The build/defer/document decision for
+> each, with the measurements behind it, is in [DETECTION_TRIAGE.md](DETECTION_TRIAGE.md).
+
 **Columns**
 - **Weight** — the *proposed* contribution to the category subscore (see
   [RISK_SCORING.md](RISK_SCORING.md)). `H`=high (25), `M`=medium (12), `L`=low (5),
