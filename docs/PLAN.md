@@ -242,6 +242,12 @@ zygote).
 > `COMPROMISED / NO_EVIDENCE_OF_COMPROMISE / INSUFFICIENT_EVIDENCE` with no access action at
 > all, because with attestation gone there is nothing that could honestly produce one.
 >
+> **Topology settled** (ADR-0010): the integrator's nonce and ours both stay, correlated by
+> the host-supplied session at their combiner. Our challenge lifecycle therefore *ships* —
+> it is production surface, not reference material — and `ChallengePurpose` survives, which
+> is what keeps a sensitive action able to demand an action-bound decision. The correlation
+> itself lives outside this repository and cannot be tested here.
+>
 > **Left in this phase:** report signing, and parsing the canonical wire form server-side.
 
 ### Phase 8 — Self-protection & hardening *(1 week)*
