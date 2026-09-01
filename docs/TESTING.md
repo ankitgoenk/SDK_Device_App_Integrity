@@ -179,7 +179,9 @@ because a debug cert is per-machine and would fail in CI.
 Measured on the Pixel, so nobody spends a spike re-deriving them:
 
 - **Loader vs `/proc/self/maps`: no divergence.** Root's view and the app's own view of the
-  same process were byte-identical (3471 lines, 815 distinct paths). Zygisk *is* mapped into
+  same process were byte-identical (3471 lines; the distinct-path figure first published here
+  was produced by the flawed extractor described below and is withdrawn rather than restated,
+  since that capture was not kept). Zygisk *is* mapped into
   `zygote64` (6 mappings) and absent from the forked child in **both** views — ReZygisk unloads
   itself rather than hiding. A `HOOK_MAPS_INCONSISTENT` detector has **no positive control on
   this hardware**; do not ship one until a divergence can be deliberately constructed.
@@ -225,7 +227,8 @@ it the second proves nothing.
 
 Adding the cloaker to `<queries>` does not help: with `org.frknkrc44.hma_oss` explicitly
 queried, a configured HMA still hid it. Nor is there an in-process trace to fall back on —
-app maps were **797 distinct paths with hiding active and 797 without**, differing only in
+app maps were **725 distinct file-backed paths with hiding active and 725 without**
+(re-measured 2026-09-02, below), differing only in
 thread-stack TIDs, because HMA-OSS filters in `system_server` and never enters our address
 space. Same conclusion as ReZygisk above, reached by a different route.
 
@@ -254,7 +257,7 @@ the device did not bootloop.
 but nothing targeting `sample-app`, the process gained **zero** new mappings. That is the
 design working, not a null result — and it means the control has to be armed deliberately, by
 scoping a module. `HideMyApplist` cannot serve: it pins its scope to `system` in its own
-`module.prop`, which independently confirms the 797/797 result above — HMA hooks
+`module.prop`, which independently confirms the 725/725 result above — HMA hooks
 `system_server` and architecturally cannot leave an app-process trace.
 
 With an in-process module scoped to `sample-app`:
@@ -383,6 +386,44 @@ neither the attack nor the detector would work.
 hard rule 6 ships new signals at `INFORMATIONAL`. A `CONFIRMED` finding that moves no score is
 the intended behaviour, not a bug — and worth seeing once, so nobody later reads a zero as
 "nothing was detected".
+
+### Correction: the distinct-path counts in this section were wrong
+
+The map counts published above on 2026-09-01 were produced by
+`awk '{print $NF}' | sort -u`, which takes the **last whitespace-separated field** as the path.
+Map paths contain spaces more often than that assumes: every `/dev/ashmem/… (deleted)`,
+`/mali csf db (deleted)`, both `/memfd:` JIT caches, and roughly forty bracketed ART region
+names such as `[anon:dalvik-Concurrent mark-compact chunk-info vector]`. All of them collapsed
+to their last token, and several distinct names collapsed to the *same* token.
+
+The same mistake produced a rule that would have flagged ART's JIT cache on every Android
+device; that is recorded with the detector it nearly shipped in. This entry corrects the
+counts it also produced.
+
+Re-measured with the full path field:
+
+| Capture | published | correct distinct path values | correct distinct **file** paths |
+| --- | --- | --- | --- |
+| `K1` clean | 797 | 820 | 725 |
+| `K1` + Vector, nothing scoped | 795 | 818 | 724 |
+| `K1` hooked | 798 | 822 | 726 |
+| `C1` stock MIUI | 625 | 652 | 568 |
+
+**Every conclusion drawn from those numbers survives, and that is not luck — they were all
+differential.** Both sides of each comparison were counted the same wrong way, so "no divergence"
+and "no in-process trace" held regardless. What was wrong was the figure quoted as a fact.
+
+The Hide My AppList comparison was re-run from scratch on 2026-09-02, because only the processed
+path lists had been kept and the collapse is not reversible — several names map to one token.
+With hiding verified active (`ROOT_MANAGER_PACKAGE` `INCONCLUSIVE` plus
+`META_VISIBILITY_RESTRICTED`), the process carries **725 distinct file-backed paths either way**,
+and no path appears only when hiding is on. The single difference across the whole map is
+`[anon:dalvik-linear-alloc shadow map]`, an ART allocation that varies between runs.
+
+Re-running it also cost a reboot: `com.tsng.hidemyapplist`, installed during the Vector work as
+a test module, put HMA-OSS into "sick mode" where it disables itself on detecting a conflicting
+module. It has been uninstalled. **A rig that has been used for another experiment is not the rig
+you documented** — check its own status display before trusting a measurement taken on it.
 
 ### Two kinds of coverage
 
