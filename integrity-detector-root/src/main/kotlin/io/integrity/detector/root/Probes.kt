@@ -74,3 +74,40 @@ internal fun hashPackageName(packageName: String): String = MessageDigest.getIns
 
 /** Long enough to be collision-free against a curated list, short enough to stay coarse. */
 private const val PACKAGE_DIGEST_LENGTH = 16
+
+/**
+ * The two app-visible surfaces that must agree.
+ *
+ * Kept as separate seams because the whole detector is the comparison between them: a test
+ * that stubbed one would prove nothing.
+ */
+internal interface BuildFieldProbe {
+    /** The value of an `android.os.Build` static field, or null if it cannot be read. */
+    fun field(name: String): String?
+}
+
+internal interface SystemPropertyProbe {
+    /**
+     * The raw value of a system property.
+     *
+     * Empty means **unreadable or unset, not different**. Property reads are labelled by
+     * SELinux context: `ro.bootimage.build.fingerprint` returns its value to `adb shell` and
+     * an empty string to an app. A comparison that scores empty as a mismatch fires on clean
+     * devices — measured, see `docs/TESTING.md` §9.
+     */
+    fun get(name: String): String?
+}
+
+internal object RealBuildFieldProbe : BuildFieldProbe {
+    override fun field(name: String): String? = runCatching {
+        Build::class.java.getField(name).get(null) as? String
+    }.getOrNull()
+}
+
+internal object RealSystemPropertyProbe : SystemPropertyProbe {
+    override fun get(name: String): String? = runCatching {
+        @Suppress("PrivateApi")
+        val clazz = Class.forName("android.os.SystemProperties")
+        clazz.getMethod("get", String::class.java).invoke(null, name) as? String
+    }.getOrNull()
+}

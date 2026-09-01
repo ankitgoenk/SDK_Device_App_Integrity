@@ -13,7 +13,7 @@ class RootDetectorsTest {
     fun `all detectors are registered and in the root category`() {
         val detectors = RootDetectors.all()
 
-        assertThat(detectors).hasSize(3)
+        assertThat(detectors).hasSize(4)
         assertThat(detectors.map { it.category }.toSet()).containsExactly(Category.ROOT)
         assertThat(detectors.map { it.id }).containsNoDuplicates()
     }
@@ -25,6 +25,7 @@ class RootDetectorsTest {
         assertThat(policy.weightOf(SignalId.ROOT_SU_BINARY)).isEqualTo(Weight.INFORMATIONAL)
         assertThat(policy.weightOf(SignalId.ROOT_MANAGER_PACKAGE)).isEqualTo(Weight.INFORMATIONAL)
         assertThat(policy.weightOf(SignalId.ROOT_DANGEROUS_PROPS)).isEqualTo(Weight.INFORMATIONAL)
+        assertThat(policy.weightOf(SignalId.ROOT_PROP_SPOOF)).isEqualTo(Weight.INFORMATIONAL)
     }
 
     @Test
@@ -34,5 +35,6 @@ class RootDetectorsTest {
         assertThat(promoted.weightOf(SignalId.ROOT_SU_BINARY)).isEqualTo(Weight.HIGH)
         assertThat(promoted.weightOf(SignalId.ROOT_MANAGER_PACKAGE)).isEqualTo(Weight.MEDIUM)
         assertThat(promoted.weightOf(SignalId.ROOT_DANGEROUS_PROPS)).isEqualTo(Weight.LOW)
+        assertThat(promoted.weightOf(SignalId.ROOT_PROP_SPOOF)).isEqualTo(Weight.HIGH)
     }
 }

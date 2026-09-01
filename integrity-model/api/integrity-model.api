@@ -186,6 +186,7 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getMETA_VISIBILITY_RESTRICTED-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_DANGEROUS_PROPS-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;
+	public final fun getROOT_PROP_SPOOF-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_SU_BINARY-isIsmlw ()Ljava/lang/String;
 	public final fun getSRV_REPORT_SIGNATURE_INVALID-isIsmlw ()Ljava/lang/String;
 }

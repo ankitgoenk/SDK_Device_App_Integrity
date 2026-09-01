@@ -1,0 +1,19 @@
+public abstract interface class de/robv/android/xposed/IXposedHookLoadPackage {
+	public abstract fun handleLoadPackage (Lde/robv/android/xposed/callbacks/XC_LoadPackage$LoadPackageParam;)V
+}
+
+public final class de/robv/android/xposed/XposedBridge {
+	public static final field INSTANCE Lde/robv/android/xposed/XposedBridge;
+	public static final fun log (Ljava/lang/String;)V
+}
+
+public final class de/robv/android/xposed/callbacks/XC_LoadPackage {
+	public fun <init> ()V
+}
+
+public final class de/robv/android/xposed/callbacks/XC_LoadPackage$LoadPackageParam {
+	public field classLoader Ljava/lang/ClassLoader;
+	public field packageName Ljava/lang/String;
+	public fun <init> ()V
+}
+
