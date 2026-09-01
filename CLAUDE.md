@@ -65,6 +65,10 @@ Kotlin official style, ktlint + detekt, conventional commits, one signal family 
 See `CONTRIBUTING.md` for the detector definition-of-done.
 
 **Keep these docs current in the same PR as the change.** `docs/PLAN.md` phase markers,
-`docs/adr/0006`'s CI-enforcement checklist and the module tables in `README.md` and
-`docs/ARCHITECTURE.md` have all gone stale before; `tools/check-doc-drift.py` now fails the
-build for the module tables, and the rest is on you.
+`docs/adr/0006`'s CI-enforcement checklist, the module tables in `README.md` and
+`docs/ARCHITECTURE.md`, and `docs/DETECTION_TRIAGE.md`'s verdicts have all gone stale before —
+the triage within hours of a merge, calling a shipped detector "BUILD (blocked)" on a
+dependency that had already landed. Two of those now fail the build:
+`tools/check-doc-drift.py` for the module tables and `tools/check-triage-consistency.py` for
+the triage's `BUILT` verdicts and its census arithmetic. The phase markers and the ADR-0006
+checklist are still on you.
