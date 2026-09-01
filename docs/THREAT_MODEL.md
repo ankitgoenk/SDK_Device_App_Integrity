@@ -18,6 +18,12 @@
 | **T1 — Script kiddie** | Runs public bypass scripts | Frida + Codeshare scripts, Lucky Patcher, Objection | Detect and defeat public one-liners; raise cost to "must customise" |
 | **T2 — Competent modder** | Reads the SDK, patches smali/native, writes bespoke hooks | Frida, LSPosed modules, apktool, Ghidra, `radare2` | Cannot be stopped client-side. Make bypass expensive, noisy and detectable server-side |
 | **T3 — Organised fraud** | Device farms, cloud phones, emulator fleets, custom ROMs, hardware | redroid, custom AOSP builds, virtualisation frameworks | Detect at the *fleet* level via server-side correlation and attestation, not per-device cleverness |
+| **T4 — Kernel-resident** | Executes in kernel space; hooks the syscalls every userspace check reads through | APatch KPM (`inline-hook`, `syscall-table-hook`), custom kernel modules | **Nothing client-side detects this, and no arrangement of client-side checks can.** Out of scope by construction; see below |
+
+**The tiers are capability, not organisation size, and T4 is not the top of a ladder the other
+three climb.** Installing APatch is within reach of a T0 curious user: it is an APK and a patched
+boot image, not an exploit chain. Treating "sophisticated attacker" as a synonym for "organised
+attacker" is the mistake this row exists to prevent.
 
 The SDK is designed to convert T1 into a hard stop, T2 into a measurable cost with strong
 server-side signal, and T3 into a backend detection problem for which the SDK supplies
@@ -26,7 +32,12 @@ evidence.
 ## Attack surfaces
 
 ### 1. Device environment
-- Root via Magisk (with DenyList/Zygisk hiding), KernelSU, APatch, or a permissive custom ROM.
+- Root via Magisk (with DenyList/Zygisk hiding), KernelSU, or a permissive custom ROM.
+- **Root via APatch, which is different in kind and belongs at T4.** Its README states that
+  Kernel Patch Modules support kernel function `inline-hook` and `syscall-table-hook`. Escalation
+  is authenticated by a user-chosen *SuperKey* described as having "higher privileges than root
+  access", not by a `su` binary with a caller allow-list — so `ROOT_SU_BINARY` has nothing to
+  find, for the same structural reason it is blind on KernelSU (measured, TESTING.md §9).
 - Bootloader unlocked / verified boot broken / dm-verity disabled.
 - SELinux permissive; `ro.debuggable=1` "userdebug" ROMs.
 - Property spoofing (`resetprop`) to hide all of the above.
@@ -81,6 +92,14 @@ bad one.
 
 1. **It cannot stop a T2+ attacker on their own device.** Anything running in the app's
    process can be modified by someone with root on that device.
+1b. **Against T4 it cannot report honestly at all, and this is not a gap to be closed.** Every
+   detection this SDK performs is a userspace read: `stat`, `openat`+`read` on `/proc/self/maps`
+   or the app's own APK, the property region, a binder call to `system_server`. A single hook on
+   `read`/`openat` returns whatever the attacker chooses to every one of them at once, leaving no
+   in-process artefact — because the artefact lives at a privilege level the SDK never observes.
+   The correct posture is not a better check; it is that the report is a *claim*, decided
+   server-side (ADR-0006), and that a client under attacker control is assumed to be able to say
+   anything (ADR-0007).
 2. **It cannot prove a device is clean.** It can only report the absence of evidence — and
    absence is weak evidence, which is why `INCONCLUSIVE` is a first-class result.
 3. **It is not a substitute for server-side controls.** Rate limits, anomaly detection,
@@ -96,7 +115,12 @@ bad one.
 - **SR3** Missing/refused reports must be treated as a risk signal by the backend, not as a
   neutral outcome.
 - **SR4** Detection must be redundant across layers (JVM, native, attestation) so no single
-  hook disables it.
+  hook disables it. **Corrected 2026-09-02: JVM and native are not independent layers against
+  T4.** Both reach the same data through the same syscalls, so one `syscall-table-hook` disables
+  both together and the redundancy is nominal. Only attestation is a genuinely different trust
+  root — and TESTING.md §9 records a rooted device returning `MEETS_STRONG_INTEGRITY`, so that
+  root has a measured ceiling of its own. Read SR4 as "redundant against T1–T2", which is what it
+  actually buys.
 - **SR5** Response must be decoupled from detection in both time and code location.
 - **SR6** No signal may collect more personal data than the decision requires (see
   [PRIVACY_AND_COMPLIANCE.md](PRIVACY_AND_COMPLIANCE.md)).
