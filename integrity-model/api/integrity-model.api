@@ -30,9 +30,29 @@ public final class io/integrity/core/Depth : java/lang/Enum {
 	public static fun values ()[Lio/integrity/core/Depth;
 }
 
+public final class io/integrity/core/DetectorRun {
+	public fun <init> (Ljava/lang/String;Lio/integrity/core/Category;Lio/integrity/core/Depth;Lio/integrity/core/RunOutcome;IJ)V
+	public final fun getCategory ()Lio/integrity/core/Category;
+	public final fun getDetectorId ()Ljava/lang/String;
+	public final fun getDurationMillis ()J
+	public final fun getMinDepth ()Lio/integrity/core/Depth;
+	public final fun getOutcome ()Lio/integrity/core/RunOutcome;
+	public final fun getSignalCount ()I
+}
+
 public final class io/integrity/core/DexAggregate {
 	public static final field INSTANCE Lio/integrity/core/DexAggregate;
 	public final fun of (Ljava/util/Map;)Ljava/lang/String;
+}
+
+public final class io/integrity/core/IntegrityDiagnostics {
+	public fun <init> (Lio/integrity/core/Depth;Ljava/lang/String;Ljava/util/List;Ljava/lang/String;)V
+	public final fun getDepth ()Lio/integrity/core/Depth;
+	public final fun getReportId ()Ljava/lang/String;
+	public final fun getRuns ()Ljava/util/List;
+	public final fun getSdkVersion ()Ljava/lang/String;
+	public final fun getUnableToConclude ()Ljava/util/List;
+	public final fun getWithEvidence ()Ljava/util/List;
 }
 
 public final class io/integrity/core/IntegrityReport {
@@ -133,6 +153,18 @@ public final class io/integrity/core/RiskScorer {
 	public static final field NATIVE_MISSING_FLOOR I
 	public fun <init> (Lio/integrity/core/Policy;)V
 	public final fun score (Ljava/util/List;F)Lio/integrity/core/ScoringResult;
+}
+
+public final class io/integrity/core/RunOutcome : java/lang/Enum {
+	public static final field EMITTED_EVIDENCE Lio/integrity/core/RunOutcome;
+	public static final field FAILED Lio/integrity/core/RunOutcome;
+	public static final field FOUND_NOTHING Lio/integrity/core/RunOutcome;
+	public static final field INCONCLUSIVE Lio/integrity/core/RunOutcome;
+	public static final field SKIPPED_FOR_DEPTH Lio/integrity/core/RunOutcome;
+	public static final field TIMED_OUT Lio/integrity/core/RunOutcome;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lio/integrity/core/RunOutcome;
+	public static fun values ()[Lio/integrity/core/RunOutcome;
 }
 
 public final class io/integrity/core/ScoringResult {

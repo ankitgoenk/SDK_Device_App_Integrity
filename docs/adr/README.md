@@ -34,3 +34,4 @@ What becomes easier, what becomes harder, what we accept.
 | [0009](0009-no-trusted-verdict-on-the-client.md) | The client vocabulary loses `TRUSTED` too | Accepted |
 | [0010](0010-two-nonces-correlated-at-the-combiner.md) | Two nonces, correlated by session at the combiner | Accepted |
 | [0011](0011-report-signing-without-attestation.md) | Report signing without attestation; a signature may incriminate, never exonerate | Accepted |
+| [0012](0012-diagnostics-never-enter-the-report.md) | Diagnostics describe what ran, and never enter the report | Accepted |

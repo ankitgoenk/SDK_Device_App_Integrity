@@ -78,6 +78,9 @@ public object IntegrityGuard {
         )
 
         current.publish(depth, report, startedAt, cacheable = mayCache(challenge))
+        // Diagnostics are delivered separately and never travel with the report: a list of
+        // checks that found nothing is exactly the shape of thing ADR-0007 forbids as evidence.
+        current.publishDiagnostics(depth, report.reportId, result.runs)
         return report
     }
 
@@ -135,6 +138,17 @@ public object IntegrityGuard {
             scope.launch { reports.emit(report) }
             // A sink that throws is the host's bug, and must not become ours.
             runCatching { config.sink?.onReport(report) }
+        }
+
+        fun publishDiagnostics(depth: Depth, reportId: String, runs: List<DetectorRun>) {
+            val sink = config.diagnosticsSink ?: return
+            val diagnostics = IntegrityDiagnostics(
+                depth = depth,
+                reportId = reportId,
+                runs = runs,
+                sdkVersion = IntegrityReport.SDK_VERSION
+            )
+            runCatching { sink.onDiagnostics(diagnostics) }
         }
     }
 
