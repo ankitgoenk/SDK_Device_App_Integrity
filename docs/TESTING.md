@@ -192,6 +192,11 @@ Measured on the Pixel, so nobody spends a spike re-deriving them:
   while `ro.boot.vbmeta.device_state` reports `locked`. `/proc/bootconfig` is root-only and
   `/proc/cmdline` carries no vbmeta entries on Android 12+, so **an app cannot make this
   comparison**. Evidence that spoofing happens; not a detector. See `ROOT_PROP_SPOOF`.
+  **Closed at both ends, measured 2026-09-02:** on `M1` (Android 11, before bootconfig existed)
+  `/proc/cmdline` is not merely uninformative, it is **denied to the app outright**. So the
+  fallback this note implied for older platforms does not exist there either. Note the contrast
+  with `/proc/**self**/cmdline`, which is readable everywhere and is a different file —
+  `APP_PROCESS_NAME_ANOMALY` depends on it.
 
 ### Attestation and cloaking, measured 2026-09-01
 
@@ -470,6 +475,43 @@ currently a very careful instrument wired to nothing.** Gate 2 is what changes i
 Incidentally, `APP_DEX_DIGEST_MISMATCH` reported `dexDigest=26d40f97…` on both `M1` and `C1` for
 the same APK — byte-identical across two OEMs and two API levels, which is the cross-device
 confirmation that `DexAggregate` is deterministic that no single device could give.
+
+### The ROOT catalogue against an openly rooted device
+
+Measured 2026-09-02 on `M1`, from **app context**, running every ROOT candidate the family has.
+The question this answers is not "does the detector work" but "is there anything there to see"
+— and on a device that is not hiding at all, the answer is mostly no.
+
+| Check | `K1` — hidden root | `M1` — openly rooted | Reachable at all? |
+| --- | --- | --- | --- |
+| `ROOT_SU_BINARY` | blind | **`/vendor/bin/su`** | yes |
+| `ROOT_VERIFIED_BOOT` | `green` | **`orange`, `flash.locked=0`** | yes |
+| `ROOT_MANAGER_PACKAGE` | `ksunext` | `magisk` | yes, until cloaked |
+| `ROOT_RW_SYSTEM` | 0 rw mounts | **0 rw mounts** | no |
+| `ROOT_MOUNT_ANOMALY` | 0 overlays | **0 overlays** | no |
+| busybox, `/sbin/*`, `/system/bin/magisk` | absent | **absent** | no |
+| `/data/adb`, `/proc/1/mounts`, `/proc/net/unix`, `/proc/cmdline` | denied | **denied** | no |
+| `ROOT_DANGEROUS_PROPS` | `release-keys` / `user` | **`release-keys` / `user`** | no |
+
+**On a phone with an unlocked bootloader and `su` in `/vendor/bin`, exactly two things are
+visible to an unprivileged app.** Everything else is as invisible as it is on the Pixel, which
+is actively cloaked.
+
+That distinction matters for how the rest of the family is read. It is tempting to model the two
+devices as *sophisticated* versus *unsophisticated* and conclude that checks failing on `K1`
+should succeed on `M1`. They do not. Magisk keeps its mounts in a private namespace whether or
+not you ask it to hide, and `/data/adb` is `0700 root` by filesystem permission rather than by
+concealment. Those checks are not weak against sophistication — **they are unobservable from an
+app process regardless of how careless the attacker was**, and no rig will change that.
+
+So the two `DEFER`s that this device was expected to unblock — `ROOT_RW_SYSTEM` and
+`ROOT_MOUNT_ANOMALY` — stay deferred, now on a much stronger basis than "we have not seen one
+yet". `ROOT_VERIFIED_BOOT` is the single candidate `M1` genuinely promotes: its condition is
+true here for the first time, and it is still unbuilt.
+
+**The useful framing.** `K1` answers *can an attacker make this signal disappear?* `M1` answers
+*was the signal ever there?* Today `M1` answered "no" for most of the ROOT family, which is the
+more actionable of the two results — it retires work rather than queueing it.
 
 ### Two kinds of coverage
 
