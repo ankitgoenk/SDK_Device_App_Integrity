@@ -5,7 +5,15 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** Immutable SDK configuration. Build with [Builder]; see docs/INTEGRATION.md. */
+/**
+ * Immutable SDK configuration. Build with [Builder]; see docs/INTEGRATION.md.
+ *
+ * `LongParameterList` is suppressed because the constructor is `private` and every caller goes
+ * through [Builder]: nobody positionally supplies eleven arguments, and the rule is aimed at
+ * call sites that do. If this grows past a couple more fields the answer is grouping related
+ * settings, not a larger suppression.
+ */
+@Suppress("LongParameterList")
 public class IntegrityConfig private constructor(
     public val expectedPackageName: String?,
     public val expectedSigningCertSha256: Set<String>,
@@ -19,6 +27,7 @@ public class IntegrityConfig private constructor(
     public val expectedDexDigest: String?,
     public val detectors: List<Detector>,
     public val sink: ReportSink?,
+    public val diagnosticsSink: DiagnosticsSink?,
     public val allowlistedPackages: Set<String>,
     public val detectorBudget: Duration,
     public val policy: Policy,
@@ -30,6 +39,7 @@ public class IntegrityConfig private constructor(
         private val signingPins = mutableSetOf<String>()
         private val detectors = mutableListOf<Detector>()
         private var sink: ReportSink? = null
+        private var diagnosticsSink: DiagnosticsSink? = null
         private val allowlist = mutableSetOf<String>()
         private var detectorBudget: Duration = Detector.DEFAULT_BUDGET
         private var policy: Policy = Policy.balanced()
@@ -56,6 +66,17 @@ public class IntegrityConfig private constructor(
 
         public fun addDetector(detector: Detector): Builder = apply {
             detectors += detector
+        }
+
+        /**
+         * Receive a per-detector account of each evaluation.
+         *
+         * Diagnostics never enter the report — see [IntegrityDiagnostics]. This exists so a
+         * build under test can show what ran without that list becoming something a stripped
+         * SDK could forge into a clean bill of health.
+         */
+        public fun diagnosticsSink(sink: DiagnosticsSink): Builder = apply {
+            this.diagnosticsSink = sink
         }
 
         public fun reportSink(sink: ReportSink): Builder = apply {
@@ -86,6 +107,7 @@ public class IntegrityConfig private constructor(
             expectedDexDigest = expectedDexDigest,
             detectors = detectors.toList(),
             sink = sink,
+            diagnosticsSink = diagnosticsSink,
             allowlistedPackages = allowlist.toSet(),
             detectorBudget = detectorBudget,
             policy = policy,

@@ -8,7 +8,15 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Raw output of one engine pass, before scoring. */
-internal class EngineResult(val signals: List<Signal>, val coverage: Float)
+internal class EngineResult(
+    val signals: List<Signal>,
+    val coverage: Float,
+    /**
+     * What each detector did, for [IntegrityDiagnostics]. Never enters the report — see the
+     * class doc there for why a list of checks that found nothing must not travel as evidence.
+     */
+    val runs: List<DetectorRun> = emptyList()
+)
 
 /**
  * Runs the applicable detectors in parallel under a per-detector time budget.
@@ -28,8 +36,9 @@ internal class DetectionEngine(
 
     suspend fun run(depth: Depth): EngineResult = coroutineScope {
         val applicable = detectors.filter { it.minDepth.ordinal <= depth.ordinal }
+        val skipped = detectors.filter { it.minDepth.ordinal > depth.ordinal }.map(::skippedRun)
         if (applicable.isEmpty()) {
-            return@coroutineScope EngineResult(emptyList(), coverage = 0f)
+            return@coroutineScope EngineResult(emptyList(), coverage = 0f, runs = skipped)
         }
 
         val outcomes = applicable
@@ -39,24 +48,60 @@ internal class DetectionEngine(
         val covered = outcomes.count { it.conclusive }
         EngineResult(
             signals = outcomes.flatMap { it.signals },
-            coverage = covered.toFloat() / applicable.size
+            coverage = covered.toFloat() / applicable.size,
+            runs = applicable.zip(outcomes) { detector, outcome -> outcome.toRun(detector) } + skipped
         )
     }
 
+    private fun skippedRun(detector: Detector) = DetectorRun(
+        detectorId = detector.id,
+        category = detector.category,
+        minDepth = detector.minDepth,
+        outcome = RunOutcome.SKIPPED_FOR_DEPTH,
+        signalCount = 0,
+        durationMillis = NEVER_RAN
+    )
+
+    private fun Outcome.toRun(detector: Detector) = DetectorRun(
+        detectorId = detector.id,
+        category = detector.category,
+        minDepth = detector.minDepth,
+        outcome = when {
+            timedOut -> RunOutcome.TIMED_OUT
+            failed -> RunOutcome.FAILED
+            signals.isEmpty() -> RunOutcome.FOUND_NOTHING
+            signals.any { it.confidence != Confidence.INCONCLUSIVE } -> RunOutcome.EMITTED_EVIDENCE
+            else -> RunOutcome.INCONCLUSIVE
+        },
+        signalCount = signals.size,
+        durationMillis = durationMillis
+    )
+
     private suspend fun runDetector(detector: Detector): Outcome {
         val budget = minOf(detector.budget, globalBudget)
+        val startedAt = now()
         return try {
             val signals = withTimeoutOrNull(budget) { detector.detect(context) }
-                ?: return Outcome(listOf(timedOut(detector)), conclusive = false)
+                ?: return Outcome(
+                    listOf(timedOut(detector)),
+                    conclusive = false,
+                    timedOut = true,
+                    durationMillis = now() - startedAt
+                )
             // An empty list means the detector ran and found nothing — that is a real
             // result. Only inconclusive-throughout means it could not determine anything.
             val conclusive = signals.isEmpty() ||
                 signals.any { it.confidence != Confidence.INCONCLUSIVE }
-            Outcome(signals, conclusive)
+            Outcome(signals, conclusive, durationMillis = now() - startedAt)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Throwable) {
-            Outcome(listOf(failed(detector, failure)), conclusive = false)
+            Outcome(
+                listOf(failed(detector, failure)),
+                conclusive = false,
+                failed = true,
+                durationMillis = now() - startedAt
+            )
         }
     }
 
@@ -77,5 +122,16 @@ internal class DetectionEngine(
         detectedAtMillis = now()
     )
 
-    private class Outcome(val signals: List<Signal>, val conclusive: Boolean)
+    private class Outcome(
+        val signals: List<Signal>,
+        val conclusive: Boolean,
+        val timedOut: Boolean = false,
+        val failed: Boolean = false,
+        val durationMillis: Long = NEVER_RAN
+    )
+
+    private companion object {
+        /** Duration for a detector that was never invoked; -1 rather than 0 so it is obvious. */
+        const val NEVER_RAN = -1L
+    }
 }

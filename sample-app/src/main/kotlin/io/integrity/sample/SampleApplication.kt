@@ -39,6 +39,7 @@ class SampleApplication : Application() {
                 )
                 .policy(Policy.observability())
                 .reportSink(LogcatSink())
+                .diagnosticsSink(DiagnosticsStore::record)
                 .build()
         )
 
