@@ -58,6 +58,7 @@ share one answer. Working the list linearly rediscovers the same fact six times.
 | --- | --- | --- |
 | `K1` | Pixel 10a, Android 16 | KernelSU Next, susfs4ksu, ReZygisk, hma_oss_zygisk, tricky_store |
 | `C1` | Xiaomi M2101K6I, Android 13 | Stock MIUI, unmodified |
+| `K2` | `K1` plus Vector v2.2 (3080) | Xposed framework, resident in hooked processes. Added 2026-09-01 as the hook-family positive control. **LSPosed itself was not usable** — last release Oct 2023, three Android versions behind `K1`'s API 36; `JingMatrix/Vector` is its maintained successor and supports 8.1–17 |
 
 Measurements below are from an **app context** (`u:r:runas_app`), not adb shell — shell is more
 privileged and its results do not transfer. Recorded **2026-08-31**.
@@ -128,7 +129,7 @@ the manager on the project's own reference device.
 | SignalId | Outcome | Evidence | Stack |
 | --- | --- | --- | --- |
 | `HOOK_SELF_TEXT_MISMATCH` | **BUILT** | Ran clean on both devices. Blind to GOT/PLT redirection and ART entry-point swaps, which change no executable byte | K1, C1 |
-| `HOOK_MAPS_INCONSISTENT` | **DOCUMENT** (not `DEFER`) | Proposed as loader-state vs `/proc/self/maps` divergence. **No divergence exists on `K1`**: root's view and the app's own view of the same process are byte-identical, and ReZygisk *unloads* from the forked child rather than hiding it — 6 zygisk mappings in `zygote64`, 0 in the app, in both views. There is nothing to observe, so there is no control to construct. Revisit only if a framework appears that scrubs maps rather than cleaning up after itself. **Compare address ranges, never path strings** — an APK-loaded `.so` maps under `…/base.apk`, so a name comparison fires on every device | K1 |
+| `HOOK_MAPS_INCONSISTENT` | **DOCUMENT** (not `DEFER`) | Proposed as loader-state vs `/proc/self/maps` divergence. **No divergence exists on `K1`**: root's view and the app's own view of the same process are byte-identical, and ReZygisk *unloads* from the forked child rather than hiding it — 6 zygisk mappings in `zygote64`, 0 in the app, in both views. There is nothing to observe, so there is no control to construct. Revisit only if a framework appears that scrubs maps rather than cleaning up after itself. **Re-tested on `K2` and the verdict holds for a stronger reason**: Vector stays *resident* in the hooked process and still does not hide — the app's own `/proc/self/maps` and root's view of it both show the same 3 mappings. A framework that never unloads is the best case for this check, and there is still no divergence. **Compare address ranges, never path strings** — an APK-loaded `.so` maps under `…/base.apk`, so a name comparison fires on every device, and `vector` as a substring matches ART's own `dalvik-Concurrent mark-compact chunk-info vector` on every device ever shipped | K1, **K2** |
 | `HOOK_PLT_GOT` | **DUPLICATE** (partial) | Its own catalogue row: hooking the reading path defeats it and `HOOK_SELF_TEXT_MISMATCH` identically, so *"the two are not independent"*. It adds coverage only against attackers who redirect GOT without hooking reads. Build it for that case knowingly, or not at all | — |
 
 ---
@@ -229,16 +230,16 @@ see §3). The remaining eighteen:
 | `HOOK_FRIDA_THREADS` | **BUILD** | `/proc/self/task` is listable and every `comm` readable — 13 threads on `K1`, 16 on `C1` | K1, C1 |
 | `HOOK_FRIDA_ARTEFACTS` | **BUILD** | Fixed-name probes into `/data/local/tmp` work; proven with a planted decoy (§5) | K1 |
 | `HOOK_FRIDA_MEMSCAN` | **BUILD** (native, costly) | Reading own executable regions is proven by `HOOK_SELF_TEXT_MISMATCH`. Scanning them for fingerprints is the same primitive at much greater cost | K1, C1 |
-| `HOOK_XPOSED_CLASSES` | **BUILD** | `Class.forName("de.robv.android.xposed.XposedBridge")` resolves or throws cleanly; absent on both. Trivially defeated — LSPosed hides itself — so a hit is evidence and a miss is nothing | K1, C1 |
-| `HOOK_XPOSED_STACK` | **BUILD** | Stack-trace inspection works; 15 frames on `K1`, 14 on `C1`, no suspicious frames | K1, C1 |
-| `HOOK_XPOSED_ARTEFACTS` | **BUILD** (partial) | `/system/framework/**` probes work and return nothing. `/data/adb/lspd` is **denied**, like every other `/data/adb` path (§1), so the modern half of this check is unavailable | K1, C1 |
+| `HOOK_XPOSED_CLASSES` | **DOCUMENT** (was `BUILD`; measured blind on `K2`) | `Class.forName` works, but there is nothing for it to find. With Vector active **and a module hooking the process**, none of `de.robv.android.xposed.XposedBridge`, `XposedHelpers` or `io.github.libxposed.api.XposedInterface` resolves — hooked and clean readings are identical. A modern framework injects its API into the **module's** classloader, not the target app's. This was `BUILD` on the reasoning that a hit is evidence; the measurement says there is no hit to have | K1, C1, **K2** |
+| `HOOK_XPOSED_STACK` | **DOCUMENT** (was `BUILD`; measured blind on `K2`) | Stack-trace inspection works. Under an active hook it returns **90 frames with 0 suspicious, byte-identical to the clean reading** — LSPlant-style hooking rewrites the ART method entry point and leaves no frame of its own. The legacy technique assumed a Java-level bridge frame that modern frameworks do not produce | K1, C1, **K2** |
+| `HOOK_XPOSED_ARTEFACTS` | **DUPLICATE** of `HOOK_UNEXPECTED_MODULE` (was `BUILD` partial) | `/system/framework/**` probes return nothing; every `/data/adb` path is denied, confirmed again on `K2` — the app cannot `stat` the framework `.so` it is currently executing. But it can **read the path out of its own `/proc/self/maps`**, which is how the same evidence arrives by a route that works. Stat-based artefact probing adds nothing the mapping check does not already give | K1, C1, **K2** |
 | `HOOK_ART_METHOD_ANOMALY` | **BUILD** | `Modifier.isNative` on sampled framework methods reads correctly (`false` for both probes on both devices). A Java-level hook typically flips this | K1, C1 |
 | `HOOK_INLINE_PROLOGUE` | **BUILD** (native) | Same primitive as the shipped self-text measurement, pointed at `libc`/`libart` symbols instead of our own `.text` | — |
 | `HOOK_DEBUGGER_ATTACHED` | **BUILD** | `Debug.isDebuggerConnected()` — `false` on both | K1, C1 |
 | `HOOK_TRACER_PID` | **BUILD** | `/proc/self/status` readable, `TracerPid: 0` on both. Control is constructible by attaching a debugger | K1, C1 |
 | `HOOK_JDWP_ENABLED` | **BUILD** | Reduces to the debuggable flag, already measured | K1, C1 |
 | `HOOK_LDPRELOAD` | **BUILD** | `/proc/self/environ` readable on both; no `LD_PRELOAD`/`LD_LIBRARY_PATH` present | K1, C1 |
-| `HOOK_UNEXPECTED_MODULE` | **DEFER** (allow-list is the whole problem) | A naive allow-list of `/system`, `/apex`, `/vendor`, `/data/app`, `/product` leaves **113 unexplained paths on `K1` and 28 on `C1`** — ART heap regions (`/ non moving space mark-bitmap`), `dalvik-cache` `.oat` files, and `frro`/`idmap` runtime-resource overlays. The detector is the allow-list; without a designed one this is a false-positive generator. Note the 4× gap between devices is Android 16 vs 13, **not** root | K1, C1 |
+| `HOOK_UNEXPECTED_MODULE` | **BUILD** (was `DEFER`; the allow-list is solved and the control fires) | The 113/28 unexplained paths came from matching *every* mapping. Restricting to **executable (`r-x`), file-backed** mappings collapses them to **0 on `K1` and 0 on `C1`**: ART heap regions are anonymous and `frro`/`idmap` overlays are not executable, so both classes disappear without being enumerated. Measured rule — executable, file-backed, outside `/system`, `/apex`, `/vendor`, `/product`, `/system_ext`, `/data/app` and `/data/misc/apexdata/com.android.art/`. Scores **0 clean / 1 hooked / 0 on `C1`**, the one being `/data/adb/modules/zygisk_vector/zygisk/arm64-v8a.so`. The final allow-list entry is not cosmetic: ART's compiled boot image appears there on `C1` and **never on `K1`**, so a rule validated on the Pixel alone would fire on every MIUI device | K1, C1, **K2** |
 | `HOOK_PTRACE_SELF` | **DOCUMENT** (mitigation, not a detector) | Forking a watchdog to occupy the ptrace slot *prevents* attachment. It emits no evidence and belongs in `ANTI_TAMPER.md`, not a signal catalogue | — |
 | `HOOK_FRIDA_PORT` | **DECLINE** | Connecting to `127.0.0.1:27042` throws `SocketException` without `INTERNET`. Beyond the permission, it needs an explicit ADR: **ADR-0003 says the SDK performs no network IO**, and whether a loopback probe counts is a question no one has answered. Hard rule 1 permits socket IO off the main thread, so this is genuinely undecided — and must be decided before it is built, not after | K1, C1 |
 | `HOOK_FRIDA_PORTSCAN` | **DECLINE** | Everything above, multiplied by a bounded port sweep of the user's own device | — |
@@ -327,10 +328,10 @@ Per family, so each column sums to the family's catalogue size and a miscount is
 | | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | ATT (6) | META (7) | Total (73) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUILT | 3 | — | 1 | 2 | — | 7 | **13** |
-| BUILD | 2 | 12 | 13 | 7 | — | — | **34** |
-| DEFER | 2 | 1 | 1 | — | — | — | **4** |
-| DOCUMENT | 6 | 2 | 1 | 1 | 6 | — | **16** |
-| DUPLICATE | — | — | 1 | — | — | — | **1** |
+| BUILD | 2 | 12 | 11 | 7 | — | — | **32** |
+| DEFER | 2 | 1 | — | — | — | — | **3** |
+| DOCUMENT | 6 | 2 | 3 | 1 | 6 | — | **18** |
+| DUPLICATE | — | — | 2 | — | — | — | **2** |
 | DECLINE | 1 | 1 | 3 | — | — | — | **5** |
 
 **73 of 82 candidates triaged. The census is closed except for `EMU` (5) and `VIRT` (4).**
@@ -365,8 +366,9 @@ would give it a control, so it reads as something to acquire rather than somethi
 
 | Candidate(s) | Blocked because | Configuration that unblocks it |
 | --- | --- | --- |
-| `HOOK_XPOSED_CLASSES`, `HOOK_XPOSED_STACK`, `HOOK_XPOSED_ARTEFACTS` | Marked **BUILD**, but no Xposed framework exists on `K1`, so none has ever been seen to fire. Under rule 2 that makes them comments | **`K2`: LSPosed.** It must stay resident in the app process to deliver hooks, unlike ReZygisk which unloads and `hma_oss_zygisk` which never enters the process at all |
-| `HOOK_MAPS_INCONSISTENT` | **DOCUMENT** — no divergence exists on `K1` | Also `K2`. Whether LSPosed *hides* its mappings from the app while root still sees them is the experiment: if it hides, this revives as divergence; if it stays visible, the finding belongs to `HOOK_UNEXPECTED_MODULE` instead. Either answer is worth having |
+| ~~`HOOK_XPOSED_CLASSES`, `HOOK_XPOSED_STACK`, `HOOK_XPOSED_ARTEFACTS`~~ | **Resolved 2026-09-01.** `K2` was built and all three were measured **blind under an active hook** — reclassified `DOCUMENT`, `DOCUMENT`, `DUPLICATE`. Two detectors cancelled before being written | — |
+| ~~`HOOK_UNEXPECTED_MODULE`~~ | **Resolved 2026-09-01.** `K2` gave it the hook family's first working positive control, and the allow-list problem that caused its `DEFER` turned out to be solved by one predicate. Now `BUILD` | — |
+| ~~`HOOK_MAPS_INCONSISTENT`~~ | **Resolved 2026-09-01, verdict unchanged.** `K2` answered it: Vector stays resident and still does not hide, so the app's view equals root's exactly. Stays `DOCUMENT`, now on evidence from a framework that had every opportunity to diverge | — |
 | `ROOT_PROP_SPOOF` (redesigned as app-visible cross-check) | Nothing is spoofed on `K1`: all seven `ro.*.build.fingerprint` values agree and match their components (TESTING.md §9). Kernel-side root needs no property rewriting | **`K3`: Magisk + Play Integrity Fix/Fork**, which rewrites fingerprint properties. Note the ceiling — `resetprop` sets all related values in one pass, so this catches incomplete spoofers, not competent ones |
 | `EMU_*`, `VIRT_*` (9 untriaged) | Neither reference device is an emulator or a clone | An AVD, and a Parallel Space-style clone of `sample-app`. Both nearly free; see above |
 

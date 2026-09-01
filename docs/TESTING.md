@@ -242,6 +242,54 @@ Nothing is spoofed on this device: root is kernel-side, so no property rewriting
 An app-visible cross-check is still the right redesign — it just cannot be falsified until a
 Magisk + Play Integrity Fork configuration exists to fail it.
 
+### The hook family gets a positive control, measured 2026-09-01
+
+`K2` = `K1` plus **Vector v2.2**, an Xposed framework resident in hooked processes. LSPosed
+itself was unusable: last release October 2023, three Android versions behind this device's
+API 36. `JingMatrix/Vector` is its maintained successor (Android 8.1–17). Installed via `ksud`
+alongside the existing ReZygisk v1.0.0, which is current; no Zygisk replacement was needed and
+the device did not bootloop.
+
+**Vector does not inject into an app with no module scoped to it.** With the framework active
+but nothing targeting `sample-app`, the process gained **zero** new mappings. That is the
+design working, not a null result — and it means the control has to be armed deliberately, by
+scoping a module. `HideMyApplist` cannot serve: it pins its scope to `system` in its own
+`module.prop`, which independently confirms the 797/797 result above — HMA hooks
+`system_server` and architecturally cannot leave an app-process trace.
+
+With an in-process module scoped to `sample-app`:
+
+| Probe | `K2` hooked | `K1` clean | `C1` clean | Outcome |
+| --- | --- | --- | --- | --- |
+| Executable, file-backed mapping outside allow-listed prefixes | **1** | 0 | 0 | `HOOK_UNEXPECTED_MODULE` — **control fires** |
+| App's own `/proc/self/maps` vs root's view of the same pid | 3 = 3 | — | — | `HOOK_MAPS_INCONSISTENT` — no divergence |
+| `XposedBridge` / `XposedHelpers` / `XposedInterface` resolve | no | no | — | `HOOK_XPOSED_CLASSES` — **blind** |
+| Suspicious stack frames | 0 of 90 | 0 of 90 | — | `HOOK_XPOSED_STACK` — **blind** |
+
+The single hit is `/data/adb/modules/zygisk_vector/zygisk/arm64-v8a.so`, mapped `r-xp`. The app
+can read that path out of its own maps **while being denied `stat` on the file it is currently
+executing** — which is why artefact probing by path is a duplicate of the mapping check rather
+than an independent one.
+
+**Two qualifiers carry the whole detector.** Matching every mapping leaves 113 unexplained
+paths on `K1`; requiring **executable and file-backed** drops that to zero, because ART's heap
+regions are anonymous and `frro`/`idmap` overlays are not executable. Neither class had to be
+enumerated.
+
+**The second device earned its keep.** The rule as first written produced **two false positives
+on `C1`** — ART's compiled boot image under `/data/misc/apexdata/com.android.art/dalvik-cache/`
+— which `K1` never exhibits. One allow-list entry fixes it. Validated on the Pixel alone, this
+detector would have fired on every MIUI device. Compare the `vector` substring trap: it matches
+ART's own `dalvik-Concurrent mark-compact chunk-info vector` on every Android device ever
+shipped. Both are the same mistake, and only a second device catches either.
+
+**What this cost and bought.** Two catalogued detectors (`HOOK_XPOSED_CLASSES`,
+`HOOK_XPOSED_STACK`) were marked `BUILD` and are measurably blind; a third
+(`HOOK_XPOSED_ARTEFACTS`) became a duplicate. One (`HOOK_UNEXPECTED_MODULE`) moved from `DEFER`
+to `BUILD` with a control that fires. The net is one buildable detector and three cancelled —
+which is the rule in `CONTRIBUTING.md` paying for itself by *removing* work, an outcome that is
+easy to miss because nothing ships.
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a
