@@ -526,6 +526,46 @@ true here for the first time, and it is still unbuilt.
 *was the signal ever there?* Today `M1` answered "no" for most of the ROOT family, which is the
 more actionable of the two results — it retires work rather than queueing it.
 
+### Two clean Android 16 devices, and why one is not enough
+
+Measured 2026-09-02 on `C2` (Google Pixel 8) and `C3` (Samsung Galaxy A36) — both stock,
+unmodified, `verifiedbootstate=green`, `flash.locked=1`, same API level.
+
+**Both detectors shipped today are silent on both.** `ROOT_PROP_SPOOF` finds no divergence
+between any `android.os.Build` field and its backing property, which is the first confirmation
+of that invariant on an OEM other than Google and Xiaomi. `HOOK_UNEXPECTED_MODULE` flags nothing.
+
+**Each device needs a different one of that detector's two exclusions.**
+
+| | `C2` Pixel 8 | `C3` Galaxy A36 |
+| --- | --- | --- |
+| Executable `memfd`/`ashmem` regions | **2** (`jit-cache`, `jit-zygote-cache`) | **0** |
+| Executable mappings under `/data/misc/apexdata/com.android.art/` | 0 | **3** |
+
+Same Android version, both clean, and neither device on its own justifies both rules. Without
+the `memfd` exclusion the detector fires on the Pixel; without the ART allow-list entry it fires
+on the Samsung. The `ashmem` variant needed a third platform again (`M1`, Android 11). Three
+separate exclusions, three devices, no two of which would have found all of them — which is the
+concrete form of the claim that device diversity is this project's binding constraint.
+
+**And `C3` retires the partition cross-check for good.** On a factory-fresh, fully locked
+flagship, **all six** partition fingerprints differ from `ro.build.fingerprint` — including
+across Android *versions*:
+
+```
+ro.build.fingerprint         samsung/a36xqnsins/a36xq:16/BP4A.251205.006/…
+ro.vendor.build.fingerprint  samsung/a36xqnsxx/a36xq:15/AP3A.240905.015.A2/…
+ro.system.build.fingerprint  samsung/a36xqnsxx/qssi_64:16/BP4A.251205.006/…
+```
+
+Android 16 on `system`, Android 15 on `vendor` and `odm`, and a generic `qssi_64` product name
+where the device name should be. The earlier `C1` result (26 disagreements on an old MIUI build)
+could be read as one vendor's sloppiness on an ageing device; this cannot. A detector comparing
+partitions to each other fires on new hardware from the largest Android OEM in the world.
+
+Incidentally `APP_DEX_DIGEST_MISMATCH` reported the same `dexDigest` on `C2` and `C3` for one
+APK — a third and fourth OEM agreeing on `DexAggregate`.
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a
