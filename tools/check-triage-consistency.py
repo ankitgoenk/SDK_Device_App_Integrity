@@ -140,6 +140,33 @@ def check(root: pathlib.Path, text: str) -> list[str]:
     return problems
 
 
+def _bump_census(text: str, column: int) -> str:
+    """Add one to a cell of the first census row, derived from the document.
+
+    Deliberately not a hardcoded string. The first version of this self-test pinned the literal
+    row `| BUILT | 4 | — | 1 | 3 | — | 7 | **15** |`, so the very next legitimate census change
+    turned two mutants into "NOT APPLIED" — which the runner reports as a failure rather than a
+    pass, but a self-test that breaks whenever the thing it guards is edited will be deleted by
+    the third person who hits it.
+    """
+    for line in text.splitlines():
+        row = CENSUS_ROW.match(line)
+        if not row:
+            continue
+        cells = [c.strip() for c in row.group(2).split("|")]
+        index = column if column >= 0 else len(cells) - 1
+        raw = cells[index]
+        digits = re.sub(r"\D", "", raw)
+        if not digits:
+            continue
+        bumped = raw.replace(digits, str(int(digits) + 1), 1)
+        mutated_cells = list(cells)
+        mutated_cells[index] = bumped
+        mutated_line = f"| {row.group(1)} | " + " | ".join(mutated_cells) + " |"
+        return text.replace(line, mutated_line, 1)
+    return text  # no census row found; the runner reports this as NOT APPLIED
+
+
 def self_test() -> int:
     """Prove the checker rejects the broken cases. Hard rule 10: a gate that cannot fail is
     worse than no gate, so every assertion above ships with a case that trips it."""
@@ -154,12 +181,8 @@ def self_test() -> int:
          text.replace("| `ROOT_PROP_SPOOF` | **BUILT**", "| `ROOT_PROP_SPOOF` | **BUILD**", 1)),
         ("a BUILT row for a signal nothing emits",
          text.replace("| `ROOT_PROP_SPOOF` | **BUILT**", "| `ROOT_NOT_A_REAL_SIGNAL` | **BUILT**", 1)),
-        ("a census cell miscounted",
-         text.replace("| BUILT | 4 | — | 1 | 3 | — | 7 | **15** |",
-                      "| BUILT | 4 | — | 1 | 2 | — | 7 | **15** |", 1)),
-        ("a census total that does not match its column",
-         text.replace("| BUILT | 4 | — | 1 | 3 | — | 7 | **15** |",
-                      "| BUILT | 4 | — | 1 | 3 | — | 7 | **14** |", 1)),
+        ("a census cell miscounted", _bump_census(text, column=0)),
+        ("a census total that does not match its column", _bump_census(text, column=-1)),
     ]
 
     failures = 0
