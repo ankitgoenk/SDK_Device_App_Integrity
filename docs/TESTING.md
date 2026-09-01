@@ -290,6 +290,53 @@ to `BUILD` with a control that fires. The net is one buildable detector and thre
 which is the rule in `CONTRIBUTING.md` paying for itself by *removing* work, an outcome that is
 easy to miss because nothing ships.
 
+### Property spoofing, measured 2026-09-01 — and why there is still no control
+
+`K3` = `K1` plus **Play Integrity Fork v18**, configured with a deliberately foreign fingerprint
+(`google/husky/husky:14/…`, a Pixel 8 Pro) on a `stallion` Pixel 10a. Built, measured, and torn
+down the same day; `K1` was verified restored afterwards.
+
+**No Magisk was involved, and none was needed.** Magisk cannot coexist with KernelSU Next — it
+requires flashing a different boot image, which would have destroyed `K1` and the `K2` rig built
+hours earlier. PIF is a Zygisk module and installs on the existing ReZygisk. The guide that
+prompted this experiment assumes Magisk because that is what *its* author ran, not because the
+technique needs it.
+
+**Half one: PIF does not spoof the properties.** Predicted from source — no script in the module
+writes `ro.*.build.fingerprint` — and confirmed on device. With PIF active and `husky`
+configured, all seven partition properties still read `stallion`.
+
+**Half two: PIF does not spoof our process either.** The app's own `android.os.Build.FINGERPRINT`
+read `stallion`, not `husky`. `killpi.sh` names the targets: `com.google.android.gms.unstable`
+and `com.android.vending`.
+
+That generalises, and it is the finding worth keeping: **spoofing aimed at attestation targets
+the attestation client, not the device.** Rewriting properties device-wide breaks unrelated
+software and fools nobody extra, since only Google's process needs deceiving. A third-party app
+therefore cannot observe this class of spoofing at all — not because it is well hidden, but
+because it was never applied to that app. `ROOT_PROP_SPOOF` has no positive control for a
+structural reason, not for want of a rig.
+
+**And the check as specified fires on a clean device.** The probe reported
+`partitionsAgree=false` on a device where `getprop` showed all seven byte-identical:
+
+```
+ro=stallion | ro.system=stallion | ro.vendor=stallion | ro.product=stallion
+| ro.odm=stallion | ro.bootimage=<EMPTY> | ro.system_ext=stallion
+```
+
+`ro.bootimage.build.fingerprint` is **unreadable to an app** — property reads are labelled by
+SELinux context — and returns an empty string, which a naive comparison scores as a difference.
+This is precisely the failure `DETECTION_TRIAGE.md` opens by warning about: a check that fires
+on a clean device and stays silent on a rooted one. An implementation must treat empty as
+unreadable-per-property and drop `ro.bootimage` from the comparison set.
+
+**Method note, and a correction.** This was visible only because the probe ran *inside the app*.
+Through `adb shell` — or `run-as` — every property agrees and the trap is invisible. The caveat
+added to `DETECTION_TRIAGE.md` earlier the same day said filesystem **and property** results
+transfer between shell and app; the property half of that was wrong and is now corrected there.
+Only filesystem results transfer.
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a
