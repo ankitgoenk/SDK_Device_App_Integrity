@@ -271,10 +271,25 @@ can read that path out of its own maps **while being denied `stat` on the file i
 executing** — which is why artefact probing by path is a duplicate of the mapping check rather
 than an independent one.
 
-**Two qualifiers carry the whole detector.** Matching every mapping leaves 113 unexplained
-paths on `K1`; requiring **executable and file-backed** drops that to zero, because ART's heap
-regions are anonymous and `frro`/`idmap` overlays are not executable. Neither class had to be
-enumerated.
+**Two qualifiers carry the whole detector — and one of them needed a third.** Matching every
+mapping leaves 113 unexplained paths on `K1`; requiring **executable and file-backed** drops
+that to zero, because ART's heap regions are anonymous and `frro`/`idmap` overlays are not
+executable. Neither class had to be enumerated.
+
+> **Corrected 2026-09-02 while implementing this.** "File-backed" is not "the path starts with
+> a slash". `memfd_create` gives *anonymous* memory a path-shaped name, and ART uses it for the
+> JIT: `/memfd:jit-cache (deleted)` and `/memfd:jit-zygote-cache (deleted)` are executable, sit
+> under no allow-listable prefix, and are present on **all four captures** — both devices, hooked
+> and clean. The rule as first written here flagged them, which would have fired on every
+> Android device running managed code.
+>
+> The measurement did not catch it because the extracting `awk` took the last whitespace-separated
+> field as the path, and for these lines that field is `(deleted)`. It dropped exactly the two
+> mappings that would have been false positives, for a reason unrelated to why they should be
+> dropped, and so reported the right answer — 0 clean, 1 hooked — from a rule that would not have
+> produced it. The **device** caught it: the detector fired `LIKELY count=2` on an unhooked
+> process during end-to-end verification. With `/memfd:` excluded the corrected rule scores
+> 0 / 1 / 0 as originally claimed, now for the right reason.
 
 **The second device earned its keep.** The rule as first written produced **two false positives
 on `C1`** — ART's compiled boot image under `/data/misc/apexdata/com.android.art/dalvik-cache/`

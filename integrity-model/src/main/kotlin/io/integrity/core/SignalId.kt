@@ -65,6 +65,12 @@ public value class SignalId(public val value: String) {
          */
         public val HOOK_SELF_TEXT_MISMATCH: SignalId = SignalId("HOOK_SELF_TEXT_MISMATCH")
 
+        /**
+         * Executable code is mapped into this process from a path no legitimate library
+         * lives under. The hook family's first signal with a measured positive control.
+         */
+        public val HOOK_UNEXPECTED_MODULE: SignalId = SignalId("HOOK_UNEXPECTED_MODULE")
+
         // --- ROOT (phase 2) ---------------------------------------------------------
 
         /** A `su` or related binary exists in a world-readable system location. */

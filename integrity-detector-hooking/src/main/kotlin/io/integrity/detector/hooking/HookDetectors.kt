@@ -1,17 +1,31 @@
 package io.integrity.detector.hooking
 
 import io.integrity.core.Detector
+import io.integrity.core.Policy
+import io.integrity.core.SignalId
+import io.integrity.core.Weight
 
 /**
  * HOOK_* signals: Frida, Xposed-family hooking, ART method anomalies, inline and PLT/GOT
  * hooks, debuggers. Most of the work lives in :integrity-native.
  *
- * Phase 0 scaffold: no detectors registered yet. Phase 3 populates this module,
- * one signal family per pull request. Every signal added here must also get a row in
- * docs/DETECTION_CATALOG.md (CI enforces it) and a false-positive analysis in the PR.
+ * The family is thinner than the catalogue suggests, and deliberately so. Measured against a
+ * resident Xposed framework on 2026-09-01, `HOOK_XPOSED_CLASSES` and `HOOK_XPOSED_STACK` were
+ * both blind and `HOOK_XPOSED_ARTEFACTS` turned out to be a duplicate of the mapping check
+ * below; all three were cancelled rather than written. See `docs/DETECTION_TRIAGE.md` §7.
  */
 public object HookDetectors {
 
     /** Every detector in this module, for [io.integrity.core.IntegrityConfig.Builder.detectors]. */
-    public fun all(): List<Detector> = emptyList()
+    public fun all(): List<Detector> = listOf(
+        UnexpectedModuleDetector()
+    )
+
+    /**
+     * Intended weight once shadow-mode data supports promotion. Not applied by default: hard
+     * rule 6 ships every new signal at `INFORMATIONAL`.
+     */
+    @JvmStatic
+    public fun proposedWeights(policy: Policy): Policy = policy
+        .withWeight(SignalId.HOOK_UNEXPECTED_MODULE, Weight.HIGH)
 }

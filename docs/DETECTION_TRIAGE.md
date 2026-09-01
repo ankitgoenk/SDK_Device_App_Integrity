@@ -246,7 +246,7 @@ see §3). The remaining eighteen:
 | `HOOK_TRACER_PID` | **BUILD** | `/proc/self/status` readable, `TracerPid: 0` on both. Control is constructible by attaching a debugger | K1, C1 |
 | `HOOK_JDWP_ENABLED` | **BUILD** | Reduces to the debuggable flag, already measured | K1, C1 |
 | `HOOK_LDPRELOAD` | **BUILD** | `/proc/self/environ` readable on both; no `LD_PRELOAD`/`LD_LIBRARY_PATH` present | K1, C1 |
-| `HOOK_UNEXPECTED_MODULE` | **BUILD** (was `DEFER`; the allow-list is solved and the control fires) | The 113/28 unexplained paths came from matching *every* mapping. Restricting to **executable (`r-x`), file-backed** mappings collapses them to **0 on `K1` and 0 on `C1`**: ART heap regions are anonymous and `frro`/`idmap` overlays are not executable, so both classes disappear without being enumerated. Measured rule — executable, file-backed, outside `/system`, `/apex`, `/vendor`, `/product`, `/system_ext`, `/data/app` and `/data/misc/apexdata/com.android.art/`. Scores **0 clean / 1 hooked / 0 on `C1`**, the one being `/data/adb/modules/zygisk_vector/zygisk/arm64-v8a.so`. The final allow-list entry is not cosmetic: ART's compiled boot image appears there on `C1` and **never on `K1`**, so a rule validated on the Pixel alone would fire on every MIUI device | K1, C1, **K2** |
+| `HOOK_UNEXPECTED_MODULE` | **BUILT** | Shipped 2026-09-01, the hooking module's first detector. The 113/28 unexplained paths came from matching *every* mapping; requiring **executable and genuinely file-backed** drops that to 0 on both devices, because ART heap regions are anonymous and `frro`/`idmap` overlays are not executable — neither class had to be enumerated. "File-backed" needed one more qualifier than the first measurement suggested: `memfd` mappings are anonymous memory with path-shaped names and ART's JIT uses two of them on every device. `CONFIRMED` for `/data/adb` and `/data/local/tmp`, `LIKELY` elsewhere since an unrecognised prefix could be an OEM. Paths are digested, never reported. Positive control on `K2`; silent on `K1` clean and on `C1` | K1, C1, **K2** |
 | `HOOK_PTRACE_SELF` | **DOCUMENT** (mitigation, not a detector) | Forking a watchdog to occupy the ptrace slot *prevents* attachment. It emits no evidence and belongs in `ANTI_TAMPER.md`, not a signal catalogue | — |
 | `HOOK_FRIDA_PORT` | **DECLINE** | Connecting to `127.0.0.1:27042` throws `SocketException` without `INTERNET`. Beyond the permission, it needs an explicit ADR: **ADR-0003 says the SDK performs no network IO**, and whether a loopback probe counts is a question no one has answered. Hard rule 1 permits socket IO off the main thread, so this is genuinely undecided — and must be decided before it is built, not after | K1, C1 |
 | `HOOK_FRIDA_PORTSCAN` | **DECLINE** | Everything above, multiplied by a bounded port sweep of the user's own device | — |
@@ -334,8 +334,8 @@ Per family, so each column sums to the family's catalogue size and a miscount is
 
 | | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | ATT (6) | META (7) | Total (73) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BUILT | 4 | — | 1 | 3 | — | 7 | **15** |
-| BUILD | 2 | 12 | 11 | 6 | — | — | **31** |
+| BUILT | 4 | — | 2 | 3 | — | 7 | **16** |
+| BUILD | 2 | 12 | 10 | 6 | — | — | **30** |
 | DEFER | 2 | 1 | — | — | — | — | **3** |
 | DOCUMENT | 5 | 2 | 3 | 1 | 6 | — | **17** |
 | DUPLICATE | — | — | 2 | — | — | — | **2** |
