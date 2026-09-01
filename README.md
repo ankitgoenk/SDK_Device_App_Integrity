@@ -17,7 +17,7 @@ host's **backend** — decides what to do with it.
 > scoring, policy and cache are implemented; the native core ships; the backend issues
 > challenges, verifies signed reports and grades evidence.
 >
-> **Seven device detections are live** — three root families, two app-tamper, two from the
+> **Eight device detections are live** — four root families, three app-tamper, one from the
 > native core — out of a catalogue of 68, and **every one of them ships at `INFORMATIONAL`
 > weight** per hard rule 6, so a default-policy deployment still scores them at zero. Do not
 > read "implemented" as "enforcing". Start with [`docs/PLAN.md`](docs/PLAN.md).

@@ -26,6 +26,8 @@ include(":integrity-detector-app")
 include(":integrity-detector-environment")
 include(":integrity-detector-emulator")
 include(":integrity-testing")
+include(":tools:xposed-api-stubs")
+include(":tools:xposed-buildspoof-fixture")
 
 // --- Tooling -----------------------------------------------------------
 include(":integrity-baseline-plugin")

@@ -1,0 +1,6 @@
+public final class io/integrity/fixture/buildspoof/BuildSpoof : de/robv/android/xposed/IXposedHookLoadPackage {
+	public static final field TARGET Ljava/lang/String;
+	public fun <init> ()V
+	public fun handleLoadPackage (Lde/robv/android/xposed/callbacks/XC_LoadPackage$LoadPackageParam;)V
+}
+

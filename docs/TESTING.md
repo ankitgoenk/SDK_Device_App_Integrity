@@ -337,6 +337,38 @@ added to `DETECTION_TRIAGE.md` earlier the same day said filesystem **and proper
 transfer between shell and app; the property half of that was wrong and is now corrected there.
 Only filesystem results transfer.
 
+### `ROOT_PROP_SPOOF` gets a control, and the repository now contains it
+
+Recorded 2026-09-01, after the `K3` result above closed the partition design.
+
+**`K4`** = `K1` + Vector + `tools/xposed-buildspoof-fixture`, a module in this repository that
+rewrites `android.os.Build` for `io.integrity.sample` only and deliberately leaves the backing
+properties untouched — reproducing what Play Integrity Fork does to
+`com.google.android.gms.unstable`, aimed somewhere we can observe it.
+
+| Condition | `Build` vs property | Live SDK report |
+| --- | --- | --- |
+| Spoofer scoped at us (`K4`) | `FINGERPRINT`/`MODEL`/`DEVICE` **DIVERGE**, `husky` vs `stallion` | `ROOT_PROP_SPOOF [ROOT/CONFIRMED] {diverged=FINGERPRINT,MODEL,DEVICE,PRODUCT, comparable=8, unreadable=0}` |
+| Spoofer unscoped (`K1`) | all agree | no signal |
+| `C1`, stock MIUI | all agree | no signal |
+
+The third row is the one that matters. `C1` is the device where a **partition** comparison found
+26 disagreements; the shipped comparison finds none there while still firing on `K4`. The
+detector distinguishes a Treble-legitimate difference from a hook, which is the entire reason it
+compares a `Build` field to its own backing property rather than partitions to each other.
+
+**Two things the fixture taught us that no unit test would have.** The framework *refuses* a
+module that packages the Xposed API — `VectorLegacyBridge: The Xposed API classes are compiled
+into the module's APK` — so the stubs live in a separate `compileOnly` project. And
+`Build.FINGERPRINT` is `static final` yet **not** inlined into readers, because it is assigned at
+runtime from `SystemProperties` rather than being a compile-time constant. If it were inlined,
+neither the attack nor the detector would work.
+
+**The risk score stayed 0/100 and the verdict `NO_EVIDENCE_OF_COMPROMISE` in every row**, because
+hard rule 6 ships new signals at `INFORMATIONAL`. A `CONFIRMED` finding that moves no score is
+the intended behaviour, not a bug — and worth seeing once, so nobody later reads a zero as
+"nothing was detected".
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a

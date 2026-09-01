@@ -76,6 +76,9 @@ public value class SignalId(public val value: String) {
         /** The build advertises itself as a debug/test-signed build. */
         public val ROOT_DANGEROUS_PROPS: SignalId = SignalId("ROOT_DANGEROUS_PROPS")
 
+        /** `android.os.Build` disagrees with the system property that backs it. */
+        public val ROOT_PROP_SPOOF: SignalId = SignalId("ROOT_PROP_SPOOF")
+
         // --- Referenced by the scorer's escalation rules ahead of their detectors ------
         // These are decisive on their own, so the scoring model names them directly.
         // Their detectors arrive in phases 4 and 7.

@@ -24,7 +24,8 @@ public object RootDetectors {
     public fun all(): List<Detector> = listOf(
         SuBinaryDetector(),
         RootManagerPackageDetector(),
-        DangerousPropertiesDetector()
+        DangerousPropertiesDetector(),
+        PropertySpoofDetector()
     )
 
     /**
@@ -39,4 +40,5 @@ public object RootDetectors {
         .withWeight(SignalId.ROOT_SU_BINARY, Weight.HIGH)
         .withWeight(SignalId.ROOT_MANAGER_PACKAGE, Weight.MEDIUM)
         .withWeight(SignalId.ROOT_DANGEROUS_PROPS, Weight.LOW)
+        .withWeight(SignalId.ROOT_PROP_SPOOF, Weight.HIGH)
 }
