@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.integrity.core.Confidence
 import io.integrity.core.DetectionContext
 import io.integrity.core.IntegrityConfig
+import io.integrity.detector.hooking.HookDetectors
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,16 +34,29 @@ class CleanDeviceBaselineTest {
         override val config: IntegrityConfig = IntegrityConfig.Builder().build()
     ) : DetectionContext
 
+    /**
+     * No detector may make a positive claim about a clean image.
+     *
+     * **Covers hook detectors as well as root ones, and that is not tidiness.** This suite was
+     * root-only when `HOOK_UNEXPECTED_MODULE` shipped a false positive that fired on every
+     * Android device running managed code; the job that should have caught it never ran the
+     * detector. A baseline scoped to one family gives the reassurance of a negative control
+     * without its protection.
+     *
+     * Still uncovered: `AppDetectors`, whose members currently return `INCONCLUSIVE` without a
+     * configured pin or baseline and so would assert nothing here. Add them when there is a
+     * configuration under which they conclude.
+     */
     @Test
-    fun noRootSignalMakesAPositiveClaimOnACleanImage() = runBlocking {
+    fun noDetectorMakesAPositiveClaimOnACleanImage() = runBlocking {
         val context = RealDetectionContext(ApplicationProvider.getApplicationContext())
 
-        val positives = RootDetectors.all()
+        val positives = (RootDetectors.all() + HookDetectors.all())
             .flatMap { it.detect(context) }
             .filter { it.confidence != Confidence.INCONCLUSIVE }
 
         assertTrue(
-            "clean image produced positive root signals: " +
+            "clean image produced positive signals: " +
                 positives.joinToString { "${it.id}=${it.confidence}${it.evidence}" },
             positives.isEmpty()
         )

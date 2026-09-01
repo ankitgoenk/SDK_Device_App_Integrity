@@ -297,8 +297,18 @@ jobs:
           path: 'sample-consumer/build/reports/'
 
   clean-baseline:
-    name: Clean-device negative control
+    # Two API levels, because one is how the ashmem false positive shipped. Android 11
+    # allocates ART's JIT cache from ashmem and Android 13+ from memfd, so a detector reading
+    # /proc/self/maps sees a different set of executable regions on each. The single API 34
+    # image could not have caught it, and did not: the bug was found on a physical Android 11
+    # phone after merge. 30 is the lowest level with a google_apis_playstore x86_64 image;
+    # minSdk is 24, so eight levels below this remain uncovered and that is a known gap.
+    name: Clean-device negative control (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 34]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -328,7 +338,7 @@ jobs:
       # rests on an assumption that is simply false.
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: ${{ matrix.api-level }}
           arch: x86_64
           target: google_apis_playstore
           # && throughout, so a failing suite cannot hide behind the logcat dump that
@@ -348,7 +358,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: clean-baseline-reports
+          # Matrix legs upload in parallel; a shared name makes the second upload fail.
+          name: clean-baseline-reports-api${{ matrix.api-level }}
           path: 'integrity-detector-root/build/reports/androidTests/'
 
   native-host:
