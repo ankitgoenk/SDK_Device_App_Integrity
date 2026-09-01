@@ -29,6 +29,15 @@ jobs:
       # silently omitted integrity-model for a whole PR after it was added.
       - run: tools/check-doc-drift.py
 
+      # DETECTION_TRIAGE's BUILT verdicts must match the signals the SDK actually emits, and
+      # its census must add up. APP_DEX_DIGEST_MISMATCH shipped and the triage still called it
+      # "BUILD (blocked)" on a dependency that had already landed.
+      - run: tools/check-triage-consistency.py
+
+      # ...and the gate must be able to fail. Four deliberately broken triages, all of which
+      # it has to reject. Hard rule 10 applies to the gates themselves.
+      - run: tools/check-triage-consistency.py --self-test
+
   quality:
     name: Static analysis
     runs-on: ubuntu-latest

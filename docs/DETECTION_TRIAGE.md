@@ -216,8 +216,8 @@ the platform is generally willing — the interesting failures are elsewhere.
 | `APP_DEBUGGABLE_FLAG` | **BUILD** | `FLAG_DEBUGGABLE=true` on both, correctly, because `sample-app` is a debug build. Trivially observable; the control is a build variant | K1, C1 |
 | `APP_UNEXPECTED_DEX` | **BUILD** | Hidden-API reflection into `dalvik.system.BaseDexClassLoader.pathList` **still works** on API 33 and 36 — `dexElements=1` on both. That was the open question | K1, C1 |
 | `APP_PROCESS_NAME_ANOMALY` | **BUILD** | `/proc/self/cmdline` readable; matches the package on both | K1, C1 |
-| `APP_DEX_DIGEST_MISMATCH` | **BUILD** (blocked) | Own APK readable (10.2 MB). Observable, but needs the build-time baseline from `integrity-baseline-plugin`, which is phase 4 and unbuilt. The dependency is a plugin, not a platform limit | K1, C1 |
-| `APP_RESOURCE_TAMPER` | **BUILD** (blocked) | Same shape and the same baseline dependency | — |
+| `APP_DEX_DIGEST_MISMATCH` | **BUILT** | Shipped 2026-09-01. The block was `integrity-baseline-plugin`, which now computes the build-time baseline; both ends share one `DexAggregate` construction in `integrity-model`, because the first cut had the plugin emitting per-entry digests while the client computed an aggregate — two halves that would have compiled, tested green on both sides, and never agreed about a single APK. Declines on split installs rather than accusing: this id escalates decisively, so a Play Feature Delivery false positive would call the host's own app fake | K1, C1 |
+| `APP_RESOURCE_TAMPER` | **BUILD** (unblocked 2026-09-01) | Same shape as `APP_DEX_DIGEST_MISMATCH` and it shared the same baseline dependency, which is now satisfied — `integrity-baseline-plugin` already digests `resources.arsc` and the `res/` tree alongside dex. The remaining work is the client half and a decision on how much of `res/` to cover: overlays and per-density splits move resources around legitimately, so the split-install caution that applies to dex applies here at least as hard | — |
 | `APP_TASK_HIJACK_RISK` | **DOCUMENT** (host posture, not a detector) | `taskAffinity` reads back fine — but it describes **the host's own manifest**, not the device. It cannot distinguish a compromised device from a badly configured app, and the fix is the host's to make. This is lint for integrators, like `ENV_OVERLAY_DETECTED` | K1, C1 |
 
 Seven of ten are buildable and two of those wait only on a plugin. APP is the healthiest branch
@@ -334,8 +334,8 @@ Per family, so each column sums to the family's catalogue size and a miscount is
 
 | | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | ATT (6) | META (7) | Total (73) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BUILT | 4 | — | 1 | 2 | — | 7 | **14** |
-| BUILD | 2 | 12 | 11 | 7 | — | — | **32** |
+| BUILT | 4 | — | 1 | 3 | — | 7 | **15** |
+| BUILD | 2 | 12 | 11 | 6 | — | — | **31** |
 | DEFER | 2 | 1 | — | — | — | — | **3** |
 | DOCUMENT | 5 | 2 | 3 | 1 | 6 | — | **17** |
 | DUPLICATE | — | — | 2 | — | — | — | **2** |
