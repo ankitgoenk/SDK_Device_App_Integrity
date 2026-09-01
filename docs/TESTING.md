@@ -425,6 +425,52 @@ a test module, put HMA-OSS into "sick mode" where it disables itself on detectin
 module. It has been uninstalled. **A rig that has been used for another experiment is not the rig
 you documented** — check its own status display before trusting a measurement taken on it.
 
+### `M1`: a third device, and the false positive only it could find
+
+Added 2026-09-02. **Samsung Galaxy A50s (`a50s`), Android 11 / API 30, rooted with Magisk and
+making no attempt to hide it** — the opposite adversary to `K1`:
+
+| | `K1` Pixel 10a | `M1` Galaxy A50s |
+| --- | --- | --- |
+| Root | KernelSU Next + susfs + tricky_store | Magisk, unconcealed |
+| `ro.boot.verifiedbootstate` | `green` | **`orange`** |
+| `ro.boot.flash.locked` | `1` | **`0`** |
+| `su` on `PATH` | absent | **`/vendor/bin/su`** |
+| Manager package | `com.rifsxd.ksunext` | `com.topjohnwu.magisk` |
+
+**Its first run produced a false positive, and no configuration of the other two devices could
+have produced it.** `HOOK_UNEXPECTED_MODULE` fired `LIKELY {count=1, rootModuleDir=false}` on
+`/dev/ashmem/jit-zygote-cache_4112_4112 (deleted)` — ART's JIT cache. Android 11 allocates it
+from **ashmem**; Android 13 and 16 use **memfd**, which the detector already excluded. The bug
+was API-level-specific, and both earlier reference devices are newer.
+
+That is the same class of error twice in one day: a kernel facility that names anonymous memory
+like a file. The exclusion is now written as a *category* rather than two strings, and the
+`ashmem` line is a test fixture so the older platform stays covered without an Android 11 device
+attached.
+
+**Two detectors gained their first positive control here.** `ROOT_SU_BINARY` fires `CONFIRMED
+{artefact=su, matches=1}` — it had never fired on any device, because KernelSU scopes `su` to
+granted namespaces and `C1` is clean. And `ROOT_VERIFIED_BOOT`, still unbuilt, finally has a
+device where its condition is true.
+
+**What the report looks like on a device that is openly rooted:**
+
+```
+Verdict: NO_EVIDENCE_OF_COMPROMISE          Risk score: 0/100
+• ROOT_SU_BINARY       [ROOT/CONFIRMED] {artefact=su, matches=1}
+• ROOT_MANAGER_PACKAGE [ROOT/LIKELY]    {packages=1d61da52b0cccbc4, count=1}
+```
+
+A `CONFIRMED` root finding and a `LIKELY` one, and the verdict is still
+`NO_EVIDENCE_OF_COMPROMISE` at `0/100`, because hard rule 6 ships every signal at
+`INFORMATIONAL`. That is the intended behaviour and it is worth seeing written out: **the SDK is
+currently a very careful instrument wired to nothing.** Gate 2 is what changes it.
+
+Incidentally, `APP_DEX_DIGEST_MISMATCH` reported `dexDigest=26d40f97…` on both `M1` and `C1` for
+the same APK — byte-identical across two OEMs and two API levels, which is the cross-device
+confirmation that `DexAggregate` is deterministic that no single device could give.
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a
