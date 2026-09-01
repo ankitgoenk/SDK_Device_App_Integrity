@@ -190,8 +190,11 @@ Measured on the Pixel, so nobody spends a spike re-deriving them:
 - **Property spoofing exists but is unreachable.** `/proc/bootconfig` says
   `androidboot.vbmeta.device_state = "unlocked"` and `verifiedbooterror = "ERROR_VERIFICATION"`
   while `ro.boot.vbmeta.device_state` reports `locked`. `/proc/bootconfig` is root-only and
-  `/proc/cmdline` carries no vbmeta entries on Android 12+, so **an app cannot make this
-  comparison**. Evidence that spoofing happens; not a detector. See `ROOT_PROP_SPOOF`.
+  `/proc/cmdline` is **denied to the app outright on Android 16** — measured 2026-09-02 on the
+  Pixel 10a, alongside `/proc/bootconfig`, `/proc/1/mounts`, `/proc/1/maps` and `/proc/net/unix`.
+  The original note here said it was readable but carried no vbmeta entries on Android 12+; the
+  readability half was wrong, and the same is true on Android 11 (see below), so **an app cannot
+  make this comparison on any tested platform**. Evidence that spoofing happens; not a detector. See `ROOT_PROP_SPOOF`.
   **Closed at both ends, measured 2026-09-02:** on `M1` (Android 11, before bootconfig existed)
   `/proc/cmdline` is not merely uninformative, it is **denied to the app outright**. So the
   fallback this note implied for older platforms does not exist there either. Note the contrast
@@ -565,6 +568,37 @@ partitions to each other fires on new hardware from the largest Android OEM in t
 
 Incidentally `APP_DEX_DIGEST_MISMATCH` reported the same `dexDigest` on `C2` and `C3` for one
 APK — a third and fourth OEM agreeing on `DexAggregate`.
+
+### Properties an app cannot read on Android 16
+
+Measured 2026-09-02 on `K1` (Pixel 10a, API 36) from app context, re-running the same probe used
+on `M1` (Android 11). Two documented claims were wrong, and one of them was load-bearing on
+planned work.
+
+| Read | `adb shell` | app, Android 11 (`M1`) | app, Android 16 (`K1`) |
+| --- | --- | --- | --- |
+| `ro.debuggable` | `0` | `0` | **empty** |
+| `ro.secure` | `1` | `1` | **empty** |
+| `/proc/cmdline` | readable | **denied** | **denied** |
+| `/proc/bootconfig`, `/proc/1/mounts`, `/proc/1/maps`, `/proc/net/unix` | root only | denied | denied |
+
+**`ro.debuggable` and `ro.secure` are the same class of trap as
+`ro.bootimage.build.fingerprint`:** a labelled property that returns an empty string rather than
+an error, on a platform version rather than a particular device. `ROOT_DANGEROUS_PROPS` names all
+three of `ro.debuggable`, `ro.secure` and `service.adb.root` as phase-3 native work — and native
+does not help, because the restriction is on the property label, not the calling language. That
+row now says so.
+
+**`/proc/cmdline` was never the fallback it was described as.** The note in "results that are
+answers" said it was readable but carried no vbmeta entries on Android 12+, implying older
+platforms had an opening. Denied on both tested platforms, so the comparison is unavailable
+everywhere, not merely uninformative on new devices.
+
+This is the third distinct instance of the same failure: a read that returns *empty* rather than
+failing, which any check comparing values scores as a difference. The first sank the partition
+cross-check; the second is why the shipped `ROOT_PROP_SPOOF` treats empty as
+unreadable-per-property; this is the third. **Whenever a check reads a property, the empty case
+needs its own branch before the comparison, not after.**
 
 ### Two kinds of coverage
 
