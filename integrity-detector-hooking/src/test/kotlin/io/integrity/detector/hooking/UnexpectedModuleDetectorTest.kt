@@ -67,6 +67,14 @@ class UnexpectedModuleDetectorTest {
     private val jitZygoteCache =
         "7b0f400000-7b0f500000 r-xp 00000000 00:04 12346 /memfd:jit-zygote-cache (deleted)"
 
+    /**
+     * The same JIT cache on **Android 11**, which uses `ashmem` rather than `memfd`. Verbatim
+     * from the Galaxy A50s. Absent from both newer reference devices, so this line is the only
+     * reason the older platform is covered at all.
+     */
+    private val jitCacheAshmem =
+        "d0e00000-d0e40000 r-xp 00000000 00:04 32768 /dev/ashmem/jit-zygote-cache_4112_4112 (deleted)"
+
     /** The positive control: Vector's Zygisk library, resident in a hooked process. */
     private val hookLib =
         "7f1da53000-7f1db7b000 r-xp 00000000 fe:3a 42226 " +
@@ -92,6 +100,16 @@ class UnexpectedModuleDetectorTest {
         )
 
         assertThat(signals).isEmpty()
+    }
+
+    @Test
+    fun `the Android 11 JIT cache uses ashmem, and must not fire either`() = runTest {
+        // Shipped as a false positive and caught on a third device's first run. Android 11
+        // allocates the JIT cache from ashmem; 13 and 16 use memfd, so neither earlier
+        // reference phone could have exposed it. The exclusion is a category — kernel
+        // anonymous-memory namespaces with path-shaped names — not a list of two quirks.
+        assertThat(detect(jitCacheAshmem)).isEmpty()
+        assertThat(detect(systemLib, ownApk, jitCacheAshmem)).isEmpty()
     }
 
     @Test
