@@ -1,5 +1,6 @@
 package io.integrity.baseline
 
+import io.integrity.core.DexAggregate
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipFile
@@ -24,19 +25,31 @@ public data class Baseline(
      * against something a device reports, and a representation that can render two ways
      * makes a comparison that can answer two ways.
      */
+    /**
+     * The value a device compares against, computed by [DexAggregate] — the same code the
+     * client runs. A second implementation here is how the build and the device would come to
+     * disagree about identical bytes.
+     */
+    public val dexAggregate: String? get() = DexAggregate.of(dex)
+
     public fun toJson(): String = buildString {
-        append("""{"dex":""")
+        // Escaped rather than raw strings: the separators here are almost all quotes, and
+        // counting them inside a raw literal is how the first version emitted a doubled one.
+        // Keys stay lexicographically sorted: dex < dexAggregate < nativeLibs < packageName.
+        append("{\"dex\":")
         appendMap(dex)
-        append(""","nativeLibs":""")
+        append(",\"dexAggregate\":\"")
+        append(dexAggregate ?: "")
+        append("\",\"nativeLibs\":")
         appendMap(nativeLibs)
-        append(""","packageName":"""")
+        append(",\"packageName\":\"")
         append(packageName)
-        append(""""}""")
+        append("\"}")
     }
 
     private fun StringBuilder.appendMap(entries: Map<String, String>) {
         append(
-            entries.entries.sortedBy { it.key }.joinToString(",", "{", "}") { (k, v) -> """"$k":"$v"""" }
+            entries.entries.sortedBy { it.key }.joinToString(",", "{", "}") { (k, v) -> "\"$k\":\"$v\"" }
         )
     }
 }

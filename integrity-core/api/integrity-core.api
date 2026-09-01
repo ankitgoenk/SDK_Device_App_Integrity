@@ -23,11 +23,12 @@ public final class io/integrity/core/Detector$Companion {
 
 public final class io/integrity/core/IntegrityConfig {
 	public static final field Companion Lio/integrity/core/IntegrityConfig$Companion;
-	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/util/List;Lio/integrity/core/ReportSink;Ljava/util/Set;JLio/integrity/core/Policy;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/util/Set;Ljava/lang/String;Ljava/util/List;Lio/integrity/core/ReportSink;Ljava/util/Set;JLio/integrity/core/Policy;Ljava/util/Map;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAllowlistedPackages ()Ljava/util/Set;
 	public final fun getCacheTtls ()Ljava/util/Map;
 	public final fun getDetectorBudget-UwyO8pc ()J
 	public final fun getDetectors ()Ljava/util/List;
+	public final fun getExpectedDexDigest ()Ljava/lang/String;
 	public final fun getExpectedPackageName ()Ljava/lang/String;
 	public final fun getExpectedSigningCertSha256 ()Ljava/util/Set;
 	public final fun getPolicy ()Lio/integrity/core/Policy;
@@ -42,6 +43,7 @@ public final class io/integrity/core/IntegrityConfig$Builder {
 	public final fun cacheTtl-HG0u8IE (Lio/integrity/core/Depth;J)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun detectorBudget-LRDsOJo (J)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun detectors (Ljava/util/List;)Lio/integrity/core/IntegrityConfig$Builder;
+	public final fun expectedDexDigest (Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun expectedPackageName (Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun expectedSigningCertSha256 ([Ljava/lang/String;)Lio/integrity/core/IntegrityConfig$Builder;
 	public final fun policy (Lio/integrity/core/Policy;)Lio/integrity/core/IntegrityConfig$Builder;

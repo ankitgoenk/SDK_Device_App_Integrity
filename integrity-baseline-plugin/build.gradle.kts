@@ -37,6 +37,9 @@ tasks.named<org.gradle.plugin.devel.tasks.PluginUnderTestMetadata>("pluginUnderT
 }
 
 dependencies {
+    // The aggregate construction is shared with the client, so both cannot drift apart.
+    implementation(project(":integrity-model"))
+
     // compileOnly: AGP is provided by the consuming build, never shipped by us.
     compileOnly(libs.android.gradlePlugin)
     agpForTestKit(libs.android.gradlePlugin)

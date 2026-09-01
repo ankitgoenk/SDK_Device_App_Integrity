@@ -30,6 +30,11 @@ public final class io/integrity/core/Depth : java/lang/Enum {
 	public static fun values ()[Lio/integrity/core/Depth;
 }
 
+public final class io/integrity/core/DexAggregate {
+	public static final field INSTANCE Lio/integrity/core/DexAggregate;
+	public final fun of (Ljava/util/Map;)Ljava/lang/String;
+}
+
 public final class io/integrity/core/IntegrityReport {
 	public static final field Companion Lio/integrity/core/IntegrityReport$Companion;
 	public static final field SDK_VERSION Ljava/lang/String;

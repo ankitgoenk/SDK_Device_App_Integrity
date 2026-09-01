@@ -9,6 +9,14 @@ import kotlin.time.Duration.Companion.seconds
 public class IntegrityConfig private constructor(
     public val expectedPackageName: String?,
     public val expectedSigningCertSha256: Set<String>,
+    /**
+     * Aggregate `classes*.dex` digest from `integrity-baseline-plugin`, if the host bakes one in.
+     *
+     * Null is the ordinary state: the digest of an artifact cannot live inside that artifact, so
+     * supplying it is a deliberate act by the host. Absent it, the SDK still measures and reports,
+     * and a backend holding the baseline performs the comparison instead.
+     */
+    public val expectedDexDigest: String?,
     public val detectors: List<Detector>,
     public val sink: ReportSink?,
     public val allowlistedPackages: Set<String>,
@@ -18,6 +26,7 @@ public class IntegrityConfig private constructor(
 ) {
     public class Builder {
         private var expectedPackageName: String? = null
+        private var expectedDexDigest: String? = null
         private val signingPins = mutableSetOf<String>()
         private val detectors = mutableListOf<Detector>()
         private var sink: ReportSink? = null
@@ -28,6 +37,11 @@ public class IntegrityConfig private constructor(
 
         public fun expectedPackageName(name: String): Builder = apply {
             expectedPackageName = name
+        }
+
+        /** The aggregate dex digest emitted by `integrity-baseline-plugin` for this build. */
+        public fun expectedDexDigest(digest: String): Builder = apply {
+            expectedDexDigest = digest.trim()
         }
 
         /** Accepts several pins so signing-key rotation does not false-positive. */
@@ -69,6 +83,7 @@ public class IntegrityConfig private constructor(
         public fun build(): IntegrityConfig = IntegrityConfig(
             expectedPackageName = expectedPackageName,
             expectedSigningCertSha256 = signingPins.toSet(),
+            expectedDexDigest = expectedDexDigest,
             detectors = detectors.toList(),
             sink = sink,
             allowlistedPackages = allowlist.toSet(),
