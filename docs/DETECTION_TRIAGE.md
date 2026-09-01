@@ -21,7 +21,7 @@ on the current hardware and are marked as such rather than guessed.
 | --- | --- |
 | **BUILT** | Implemented and measured on the reference devices |
 | **BUILD** | Observable, a positive control exists or is constructible, worth the false-positive cost |
-| **DEFER** | Observable, but no positive control yet — *do not implement until one exists* |
+| **DEFER** | Observable, but no positive control yet — *do not implement until one exists*. **Must name the configuration that would produce the control**, so the entry is a procurement item rather than an indefinite hold |
 | **DOCUMENT** | Not observable by an unprivileged app, or the technique as specified cannot work. The id stays; ids are deprecated, never reused |
 | **DUPLICATE** | Covered by another detector, or shares its bypass so completely that it adds no independent evidence |
 | **DECLINE** | Observable and buildable, rejected on false-positive or user-harm grounds |
@@ -41,7 +41,15 @@ configuration. "Not observable on KernelSU Next + susfs" is not "not observable"
 is blind here because KernelSU scopes `su` to granted namespaces; on Magisk with DenyList off,
 the same detector fires.
 
-**4. Triage by mechanism, not by row.** Six catalogue entries hinge on package visibility and
+**4. The control must match the attacker, not the device on hand.** `K1` is the right control
+for `ROOT_*` and `HOOK_*`. It is the *wrong* control for `APP_TAMPER`: `APP_DEX_DIGEST_MISMATCH`
+targets a mass-distributed repackaged app on an ordinary unrooted phone, where the client is
+honest and the server-side comparison is decisive, so its positive control is a synthetic
+tampered archive in a unit test and no configuration of `K1` improves on that. Judging every
+candidate against the rooted phone quietly biases the SDK toward anti-root and away from the
+family with the broader reach.
+
+**5. Triage by mechanism, not by row.** Six catalogue entries hinge on package visibility and
 share one answer. Working the list linearly rediscovers the same fact six times.
 
 ## Reference stacks
@@ -53,6 +61,14 @@ share one answer. Working the list linearly rediscovers the same fact six times.
 
 Measurements below are from an **app context** (`u:r:runas_app`), not adb shell — shell is more
 privileged and its results do not transfer. Recorded **2026-08-31**.
+
+> **`run-as` is not the app process, and for anything hooked it gives the wrong answer.**
+> A `run-as` shell is not zygote-forked, so it does not inherit Zygisk/LSPosed injection or
+> per-uid package filtering applied to the app. Measured 2026-09-01: with Hide My AppList
+> aimed at the sample app, `run-as` still listed `com.rifsxd.ksunext` and
+> `org.frknkrc44.hma_oss` while the app process saw neither (TESTING.md §9). Filesystem and
+> property results below transfer; **package-visibility and in-process results do not** and
+> must be re-measured from the app before being relied on.
 
 ---
 
@@ -340,3 +356,24 @@ capability, and the distribution is the point:
   `APP_DEX_DIGEST_MISMATCH` and `APP_RESOURCE_TAMPER` together, and gives the SDK the one thing
   it currently cannot do: notice that *the app itself* changed — which, unlike everything in
   ROOT, a rooted device does not automatically defeat.
+
+### Blocked on hardware, not on effort — the procurement list
+
+Added 2026-09-01. Rule 3 warns that "not observable on KernelSU Next + susfs" is not "not
+observable"; this is that warning made actionable. Each entry names the configuration that
+would give it a control, so it reads as something to acquire rather than something to wait for.
+
+| Candidate(s) | Blocked because | Configuration that unblocks it |
+| --- | --- | --- |
+| `HOOK_XPOSED_CLASSES`, `HOOK_XPOSED_STACK`, `HOOK_XPOSED_ARTEFACTS` | Marked **BUILD**, but no Xposed framework exists on `K1`, so none has ever been seen to fire. Under rule 2 that makes them comments | **`K2`: LSPosed.** It must stay resident in the app process to deliver hooks, unlike ReZygisk which unloads and `hma_oss_zygisk` which never enters the process at all |
+| `HOOK_MAPS_INCONSISTENT` | **DOCUMENT** — no divergence exists on `K1` | Also `K2`. Whether LSPosed *hides* its mappings from the app while root still sees them is the experiment: if it hides, this revives as divergence; if it stays visible, the finding belongs to `HOOK_UNEXPECTED_MODULE` instead. Either answer is worth having |
+| `ROOT_PROP_SPOOF` (redesigned as app-visible cross-check) | Nothing is spoofed on `K1`: all seven `ro.*.build.fingerprint` values agree and match their components (TESTING.md §9). Kernel-side root needs no property rewriting | **`K3`: Magisk + Play Integrity Fix/Fork**, which rewrites fingerprint properties. Note the ceiling — `resetprop` sets all related values in one pass, so this catches incomplete spoofers, not competent ones |
+| `EMU_*`, `VIRT_*` (9 untriaged) | Neither reference device is an emulator or a clone | An AVD, and a Parallel Space-style clone of `sample-app`. Both nearly free; see above |
+
+`K2` and `K3` are the same shape of work as `K1` and would settle six candidates between them.
+That makes building them higher-leverage than any individual detector on the BUILD list — which
+is the practical consequence of rule 2, stated as a plan rather than as a prohibition.
+
+**What this list is not.** A configuration that produces a control does not make the detector
+worth shipping; it makes it *assessable*. `ROOT_PROP_SPOOF` may still be declined on its bypass
+ceiling once `K3` exists. Acquiring the hardware buys the right to decide on evidence.
