@@ -58,6 +58,8 @@ share one answer. Working the list linearly rediscovers the same fact six times.
 | --- | --- | --- |
 | `K1` | Pixel 10a, Android 16 | KernelSU Next, susfs4ksu, ReZygisk, hma_oss_zygisk, tricky_store |
 | `C1` | Xiaomi M2101K6I, Android 13 | Stock MIUI, unmodified |
+| `C2` | Google Pixel 8 (`shiba`), Android 16 | Stock, unmodified, `green`/locked. The clean-**and**-Google quadrant `K1` could never provide: it separates a Pixel trait from a clean trait |
+| `C3` | Samsung Galaxy A36 (`a36xq`), Android 16 | Stock, unmodified, `green`/locked. A modern, heavily-customised OEM at the same API level as `C2`, which is what makes the pair useful |
 | `M1` | Samsung Galaxy A50s (`a50s`), Android 11 / API 30 | **Magisk, and honest about it.** `verifiedbootstate=orange`, `flash.locked=0`, `su` at `/vendor/bin/su` visible even on `PATH`, `com.topjohnwu.magisk` installed. The opposite adversary to `K1`: no hiding at all. Added 2026-09-02 — its first run produced a false positive that two devices could not have exposed |
 | `K2` | `K1` plus Vector v2.2 (3080) | Xposed framework, resident in hooked processes. Added 2026-09-01 as the hook-family positive control. **LSPosed itself was not usable** — last release Oct 2023, three Android versions behind `K1`'s API 36; `JingMatrix/Vector` is its maintained successor and supports 8.1–17 |
 | `K4` | `K1` plus Vector and `tools/xposed-buildspoof-fixture` | The `ROOT_PROP_SPOOF` positive control, and it lives in this repository. A scoped Xposed module rewrites `android.os.Build` for `io.integrity.sample` only and deliberately leaves the backing properties alone. Rebuild with `:tools:xposed-buildspoof-fixture:assembleDebug`; its API stubs are `compileOnly` because a module that packages them is refused by the framework |
