@@ -133,13 +133,13 @@ Everything in §2 and §3 above describes rigs that *should* exist. This section
 that **do**, and exactly what the SDK observed on them. Every cell below is a measured run, not
 an expectation: a table of assumptions formatted like evidence is worse than no table.
 
-Recorded **2026-08-31**, against `fix/native-self-text-and-visibility`.
+Recorded **2026-08-31**, against `fix/native-self-text-and-visibility`. The device has since gained standing rigs — see the State row, and §§ below dated 2026-09-01.
 
 | | Positive control | Clean control |
 | --- | --- | --- |
 | Device | Pixel 10a (`stallion`) | Xiaomi M2101K6I (`sweetin`) |
 | Build | `google/stallion/stallion:16/CP1A.260505.005/15081906:user/release-keys` | MIUI, Android 13 (API 33) |
-| State | **Rooted**: KernelSU Next (`com.rifsxd.ksunext`, `ksud 3.2.0`), custom kernel `6.1.145-android14-Wild`, modules `susfs4ksu` / `tricky_store` / `rezygisk` / `hma_oss_zygisk` | Stock, unmodified |
+| State | **Rooted**: KernelSU Next (`com.rifsxd.ksunext`, `ksud 3.2.0`), custom kernel `6.1.145-android14-Wild`, modules `susfs4ksu` / `tricky_store` / `rezygisk` / `hma_oss_zygisk`. **Since 2026-09-01 it also carries `zygisk_vector` and the `buildspoof` fixture permanently** — the `K2` and `K4` rigs. Both are inert until a module is *scoped* to a package, so the readings in this section still describe `K1`; scope one and the device becomes `K2`/`K4`. Anything measured here from now on must say which | Stock, unmodified |
 
 ### What the SDK reported
 
