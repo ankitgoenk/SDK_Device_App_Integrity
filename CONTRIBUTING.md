@@ -35,6 +35,21 @@ positive fixture reviewed before any implementation exists — both are far easi
 away once there is code to defend. `docs/detectors/HOOK_SELF_TEXT_MISMATCH.md` is the
 worked example.
 
+**Ask the fixture question at catalogue time, not at implementation time.** The rule above
+is written as a build-time gate, and by then it is too late to be cheap: 82 candidates
+entered `docs/DETECTION_CATALOG.md` before anyone asked where their positive fixtures would
+come from, and `docs/DETECTION_TRIAGE.md` exists to pay that debt down afterwards. A new
+catalogue row should say, in its own words, **what configuration makes this fire**. If the
+answer is "no hardware we have", that is a legitimate row — it belongs on the procurement
+list at the end of the triage doc, not on the backlog.
+
+**Match the control to the attacker, not to the rooted phone.** The reference Pixel is the
+right control for `ROOT_*` and `HOOK_*` and the wrong one for `APP_TAMPER`, whose attacker is
+a repackaged app on an ordinary unrooted device. `APP_DEX_DIGEST_MISMATCH` ships with a
+synthetic tampered archive as its positive control and is stronger for it. "Demonstrate a
+device where it fires" is the right instinct with the wrong noun: demonstrate a *condition*
+where it fires, on whatever substrate that condition actually lives.
+
 Four of these are enforced by `tools/check-signal-catalog.py` in CI: a `SignalId` in
 production code must have a catalog row, that row must state a technique, a false-positive
 risk and a known bypass, and at least one unit test must reference the signal by name.

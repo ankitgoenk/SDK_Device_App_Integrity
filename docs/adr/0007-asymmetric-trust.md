@@ -37,11 +37,28 @@ by anyone remembering.
 
 ## Consequences
 
-**Play Integrity is load-bearing, and today it is the only load-bearing input.** The default
-policy weights no signal (hard rule 6), so detections cannot raise a verdict on their own yet.
-The honest description of the current system is "Play Integrity, plus a growing body of
-evidence that can veto it" — not "our detectors, corroborated by Google". Say it that way to
-stakeholders.
+**Play Integrity is load-bearing, and today it is the only load-bearing input — and it is
+itself compromisable.** The default policy weights no signal (hard rule 6), so detections
+cannot raise a verdict on their own yet. That much is unchanged. What changed is the second
+half: on 2026-09-01 the project's rooted Pixel 10a returned `MEETS_BASIC_INTEGRITY`,
+`MEETS_DEVICE_INTEGRITY` *and* `MEETS_STRONG_INTEGRITY`, because `tricky_store` presents a
+leaked keybox that hardware-backed attestation accepts (TESTING.md §9).
+
+So the stakeholder sentence is now: **"Play Integrity, plus a growing body of evidence that can
+veto it — including when Play Integrity itself has been fooled."** Not "our detectors,
+corroborated by Google", and no longer "Play Integrity, which is the reliable part".
+
+Two things follow, and both *strengthen* this ADR rather than undermining it. A device that
+passes `STRONG` while rooted is precisely the case where evidence-based signals carry unique
+value, and the asymmetry means our findings can veto a passing verdict while nothing can move
+the other way. And hard rule 6's insistence that reports join to **authoritative fraud
+outcomes** — not to attestation verdicts — is now demonstrably load-bearing: had attestation
+been permitted as the training label, weight promotion would be fitting against an oracle this
+device defeats.
+
+Read the measurement narrowly. One device, one keybox, one moment; Google revokes keyboxes.
+It is not "attestation is broken", and this ADR does not license treating a passing verdict as
+meaningless. It licenses refusing to treat it as proof.
 
 **A false positive is pure cost.** Since evidence never grants trust, a wrong detection can
 only ever harm a legitimate user; there is no offsetting benefit to trade against it. That is

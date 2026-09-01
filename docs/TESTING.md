@@ -191,6 +191,57 @@ Measured on the Pixel, so nobody spends a spike re-deriving them:
   `/proc/cmdline` carries no vbmeta entries on Android 12+, so **an app cannot make this
   comparison**. Evidence that spoofing happens; not a detector. See `ROOT_PROP_SPOOF`.
 
+### Attestation and cloaking, measured 2026-09-01
+
+Recorded against `claude/android-security-detection-sdk-f3c8uh` @ `3f0f938`, same Pixel 10a.
+
+**Play Integrity returns every tier on this rooted device.** Raw response, fresh nonce,
+`requestPackageName: gr.nikolasspyr.integritycheck`:
+
+```
+"deviceRecognitionVerdict": [
+    "MEETS_BASIC_INTEGRITY", "MEETS_DEVICE_INTEGRITY", "MEETS_STRONG_INTEGRITY"
+]
+```
+
+`tricky_store` presents a leaked keybox and hardware-backed attestation accepts it. Read this
+narrowly: it is **one device, one keybox, one moment** — Google revokes keyboxes, so this is
+"a current keybox passes today", not "attestation is broken". It is still enough to retire the
+claim that a failing `MEETS_DEVICE_INTEGRITY` is the most reliable root signal available, and
+`ATT_DEVICE_INTEGRITY_FAIL` and ADR-0007's Consequences were corrected in the same PR.
+
+**A configured cloaker defeats package visibility completely, including itself.**
+`org.frknkrc44.hma_oss` (Hide My AppList) was already installed here and aimed at a banking
+app, with 1722 requests filtered. Aiming its "Hide Root" template at the sample app:
+
+| HMA state | app sees | `ROOT_MANAGER_PACKAGE` | Execution coverage |
+| --- | --- | --- | --- |
+| not aimed at us | `ksunext` + `hma_oss` | **LIKELY**, `count=2` | 75% |
+| aimed at us | nothing | **INCONCLUSIVE** + `META_VISIBILITY_RESTRICTED` | 62% |
+
+The second row is the SDK behaving correctly under live attack — hard rules 2 and 9 verified
+against a real adversary rather than a fixture. The first row is its positive control; without
+it the second proves nothing.
+
+Adding the cloaker to `<queries>` does not help: with `org.frknkrc44.hma_oss` explicitly
+queried, a configured HMA still hid it. Nor is there an in-process trace to fall back on —
+app maps were **797 distinct paths with hiding active and 797 without**, differing only in
+thread-stack TIDs, because HMA-OSS filters in `system_server` and never enters our address
+space. Same conclusion as ReZygisk above, reached by a different route.
+
+**`run-as` is not a valid proxy for app-process package visibility.** A `run-as` shell saw
+packages the app process could not: it is not zygote-forked and does not inherit the hooks.
+Any visibility measurement taken through `run-as` and reported as an app result is wrong.
+Measure from the app.
+
+**The `ROOT_PROP_SPOOF` redesign has no positive control here either.** All seven
+`ro.*.build.fingerprint` values (`build`, `system`, `vendor`, `product`, `odm`, `system_ext`,
+`bootimage`) are byte-identical, and the composed fingerprint matches every component
+(`ro.product.brand`/`name`/`device`, `ro.build.id`, `.version.incremental`, `.type`, `.tags`).
+Nothing is spoofed on this device: root is kernel-side, so no property rewriting is needed.
+An app-visible cross-check is still the right redesign — it just cannot be falsified until a
+Magisk + Play Integrity Fork configuration exists to fail it.
+
 ### Two kinds of coverage
 
 `coverage` is **execution** coverage: the fraction of registered detectors that reached a

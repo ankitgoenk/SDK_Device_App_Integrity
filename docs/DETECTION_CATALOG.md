@@ -126,7 +126,7 @@ a `SignalId` constant today, because it is the one the scorer names in `DECISIVE
 
 | SignalId | Source | Layer | Weight | FP | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `ATT_DEVICE_INTEGRITY_FAIL` | Play Integrity `deviceRecognitionVerdict` lacks `MEETS_DEVICE_INTEGRITY` | SRV | H | low | The single most reliable root/bootloader signal available |
+| `ATT_DEVICE_INTEGRITY_FAIL` | Play Integrity `deviceRecognitionVerdict` lacks `MEETS_DEVICE_INTEGRITY` | SRV | H | low | **A hit is strong evidence; a miss is not evidence of a clean device.** Measured 2026-09-01 (TESTING.md §9): the rooted Pixel 10a returned `MEETS_BASIC_INTEGRITY`, `MEETS_DEVICE_INTEGRITY` **and** `MEETS_STRONG_INTEGRITY`, because `tricky_store` presents a leaked keybox that hardware-backed attestation accepts. Keyboxes get revoked, so read this as one device at one moment rather than a permanent break — but it retires the previous wording here, "the single most reliable root/bootloader signal available". This signal obeys the same asymmetry as every other (ADR-0007): it may incriminate and may never exonerate |
 | `ATT_BASIC_INTEGRITY_FAIL` | Lacks `MEETS_BASIC_INTEGRITY` | SRV | H | low | — |
 | `ATT_VIRTUAL_ONLY` | Only `MEETS_VIRTUAL_INTEGRITY` (emulator with a genuine Play image) | SRV | M | low | Legitimate for developers/ChromeOS |
 | `ATT_APP_NOT_RECOGNISED` | `appIntegrity.appRecognitionVerdict != PLAY_RECOGNIZED` | SRV | H | low | Direct repackaging/sideload evidence |
