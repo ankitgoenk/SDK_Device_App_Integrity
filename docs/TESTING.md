@@ -380,6 +380,19 @@ The third row is the one that matters. `C1` is the device where a **partition** 
 detector distinguishes a Treble-legitimate difference from a hook, which is the entire reason it
 compares a `Build` field to its own backing property rather than partitions to each other.
 
+**`K1` after the ashmem fix: verified by replay, not on the device.** The Pixel was unavailable
+when `/dev/ashmem/` was added to the exclusions, so the shipped predicate was replayed offline
+against the stored `K1` captures instead, with its constants parsed out of the Kotlin so the
+replay could not drift from the code. Result: `K1` clean and `K1`-plus-Vector-unscoped produce
+no signal, and **`K1` hooked still produces `CONFIRMED` on
+`/data/adb/modules/zygisk_vector/zygisk/arm64-v8a.so`** — the positive control survived. That
+follows from the shape of the change (an added exclusion prefix can only suppress matches, and
+`/data/adb/...` is not one it suppresses), but shape is an argument and this is a measurement.
+
+What replay does **not** cover: the detector executing in-process on the live device, and any
+drift in the rig since the captures were taken. Treat the `K1` row as verified against captured
+data on 2026-09-02 and re-run it on hardware when the Pixel is next attached.
+
 **Two things the fixture taught us that no unit test would have.** The framework *refuses* a
 module that packages the Xposed API — `VectorLegacyBridge: The Xposed API classes are compiled
 into the module's APK` — so the stubs live in a separate `compileOnly` project. And
