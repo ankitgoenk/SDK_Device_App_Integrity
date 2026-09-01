@@ -59,6 +59,7 @@ share one answer. Working the list linearly rediscovers the same fact six times.
 | `K1` | Pixel 10a, Android 16 | KernelSU Next, susfs4ksu, ReZygisk, hma_oss_zygisk, tricky_store |
 | `C1` | Xiaomi M2101K6I, Android 13 | Stock MIUI, unmodified |
 | `K2` | `K1` plus Vector v2.2 (3080) | Xposed framework, resident in hooked processes. Added 2026-09-01 as the hook-family positive control. **LSPosed itself was not usable** — last release Oct 2023, three Android versions behind `K1`'s API 36; `JingMatrix/Vector` is its maintained successor and supports 8.1–17 |
+| `K3` | `K1` plus Play Integrity Fork v18, **built and torn down 2026-09-01** | Property/`Build` spoofer. Removed after measurement: it gave no positive control and left `K1` diverging from the baseline documented here. Rebuildable in minutes from this row — it needs no Magisk, contrary to the guide that suggested it |
 
 Measurements below are from an **app context** (`u:r:runas_app`), not adb shell — shell is more
 privileged and its results do not transfer. Recorded **2026-08-31**.
@@ -67,9 +68,14 @@ privileged and its results do not transfer. Recorded **2026-08-31**.
 > A `run-as` shell is not zygote-forked, so it does not inherit Zygisk/LSPosed injection or
 > per-uid package filtering applied to the app. Measured 2026-09-01: with Hide My AppList
 > aimed at the sample app, `run-as` still listed `com.rifsxd.ksunext` and
-> `org.frknkrc44.hma_oss` while the app process saw neither (TESTING.md §9). Filesystem and
-> property results below transfer; **package-visibility and in-process results do not** and
-> must be re-measured from the app before being relied on.
+> `org.frknkrc44.hma_oss` while the app process saw neither (TESTING.md §9).
+>
+> **Property reads do not transfer either — this note said they did, and that was wrong.**
+> Corrected 2026-09-01: `ro.bootimage.build.fingerprint` returns its full value to `adb shell`
+> and an **empty string** to the app, because the two run in different SELinux contexts and
+> property reads are labelled per-context. Only *filesystem* results transfer. Package
+> visibility, in-process state **and system properties** must all be re-measured from inside
+> the app before being relied on.
 
 ---
 
@@ -89,7 +95,7 @@ privileged and its results do not transfer. Recorded **2026-08-31**.
 | `ROOT_APATCH` | **DOCUMENT** (path form) | `/data/adb/ap` denied, same mechanism. Package form covered by `ROOT_MANAGER_PACKAGE`, to which `me.bmax.apatch` has been added | K1, C1 |
 | `ROOT_SELINUX_PERMISSIVE` | **DOCUMENT** | `/sys/fs/selinux/enforce` is **denied** to the app on both devices. Readable from shell, which is why this looks implementable and is not | K1, C1 |
 | `ROOT_INIT_ARTEFACTS` | **DOCUMENT** | `/data/adb/**`, `su.d`, `init.d` — all under paths denied to the app | K1, C1 |
-| `ROOT_PROP_SPOOF` | **DOCUMENT** (redesign pending) | Every named ground-truth source is privileged: `/system/build.prop` is `0600 root`, `/proc/bootconfig` is denied **even to shell**. `/proc/cmdline` is app-readable but carries no vbmeta entries on Android 12+. The spoofing on `K1` is real and unreachable: bootconfig says `vbmeta.device_state="unlocked"` and `verifiedbooterror="ERROR_VERIFICATION"` while the property reports `locked`. A redesign must compare app-visible values **against each other** | K1 |
+| `ROOT_PROP_SPOOF` | **DOCUMENT** (redesign pending) | Every named ground-truth source is privileged: `/system/build.prop` is `0600 root`, `/proc/bootconfig` is denied **even to shell**. `/proc/cmdline` is app-readable but carries no vbmeta entries on Android 12+. The spoofing on `K1` is real and unreachable: bootconfig says `vbmeta.device_state="unlocked"` and `verifiedbooterror="ERROR_VERIFICATION"` while the property reports `locked`. A redesign comparing app-visible values **against each other** was then built and measured on `K3`, and **both halves failed** (TESTING.md §9). *Nothing to find:* PIF never writes `ro.*.build.fingerprint` — no script in the module touches it — and its `android.os.Build` spoofing is scoped to `com.google.android.gms.unstable` and `com.android.vending`, so an ordinary app's `Build.FINGERPRINT` is untouched. Attestation spoofers target the **attestation client, not the device**, because device-wide spoofing breaks unrelated things and fools nobody extra. *Worse, it fires on clean:* `ro.bootimage.build.fingerprint` is **app-unreadable** and returns empty, so a naive "all partitions agree" check reports a mismatch on a completely unspoofed device. Any implementation must treat empty as unreadable-per-property, never as difference, and drop `ro.bootimage` from the set | K1, **K3** |
 | `ROOT_SU_EXEC` | **DECLINE** | Observable and buildable. Rejected on user-harm grounds: spawning `su` may raise a root-grant prompt on the user's device, which is an SDK doing something visible and alarming on a host app's behalf. Already "disabled by default, opt-in only" in the catalogue; this makes it a decision rather than a default | — |
 
 ### What the ROOT branch actually says
@@ -369,7 +375,7 @@ would give it a control, so it reads as something to acquire rather than somethi
 | ~~`HOOK_XPOSED_CLASSES`, `HOOK_XPOSED_STACK`, `HOOK_XPOSED_ARTEFACTS`~~ | **Resolved 2026-09-01.** `K2` was built and all three were measured **blind under an active hook** — reclassified `DOCUMENT`, `DOCUMENT`, `DUPLICATE`. Two detectors cancelled before being written | — |
 | ~~`HOOK_UNEXPECTED_MODULE`~~ | **Resolved 2026-09-01.** `K2` gave it the hook family's first working positive control, and the allow-list problem that caused its `DEFER` turned out to be solved by one predicate. Now `BUILD` | — |
 | ~~`HOOK_MAPS_INCONSISTENT`~~ | **Resolved 2026-09-01, verdict unchanged.** `K2` answered it: Vector stays resident and still does not hide, so the app's view equals root's exactly. Stays `DOCUMENT`, now on evidence from a framework that had every opportunity to diverge | — |
-| `ROOT_PROP_SPOOF` (redesigned as app-visible cross-check) | Nothing is spoofed on `K1`: all seven `ro.*.build.fingerprint` values agree and match their components (TESTING.md §9). Kernel-side root needs no property rewriting | **`K3`: Magisk + Play Integrity Fix/Fork**, which rewrites fingerprint properties. Note the ceiling — `resetprop` sets all related values in one pass, so this catches incomplete spoofers, not competent ones |
+| ~~`ROOT_PROP_SPOOF` (redesigned as app-visible cross-check)~~ | **Resolved 2026-09-01, and the answer is no.** `K3` was built — **without Magisk**, which cannot coexist with KernelSU Next and would have destroyed `K1` and `K2`; PIF is a Zygisk module and installs on the existing ReZygisk. With PIF active and a deliberately foreign fingerprint configured, all seven partition properties were unchanged and the app's own `Build.FINGERPRINT` was unspoofed. No control exists because there is nothing to observe from a third-party process | — |
 | `EMU_*`, `VIRT_*` (9 untriaged) | Neither reference device is an emulator or a clone | An AVD, and a Parallel Space-style clone of `sample-app`. Both nearly free; see above |
 
 `K2` and `K3` are the same shape of work as `K1` and would settle six candidates between them.
