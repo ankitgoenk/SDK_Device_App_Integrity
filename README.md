@@ -18,7 +18,7 @@ host's **backend** — decides what to do with it.
 > challenges, verifies signed reports and grades evidence.
 >
 > **Nine device detections are live** — four root families, three app-tamper, two hooking —
-> out of a catalogue of 68, and **every one of them ships at `INFORMATIONAL`
+> out of a catalogue of 70, and **every one of them ships at `INFORMATIONAL`
 > weight** per hard rule 6, so a default-policy deployment still scores them at zero. Do not
 > read "implemented" as "enforcing". Start with [`docs/PLAN.md`](docs/PLAN.md).
 
@@ -97,6 +97,7 @@ lifecycleScope.launch {
 ./gradlew apiCheck                                      # public API is contract (apiDump to regenerate)
 tools/check-signal-catalog.py                           # every SignalId must be catalogued
 tools/check-doc-drift.py                                # module tables must match settings.gradle.kts
+tools/check-triage-consistency.py                       # the triage must match the catalogue and the code
 ```
 
 Two of those invocations look wrong and are not. `detekt ktlintCheck` needs
