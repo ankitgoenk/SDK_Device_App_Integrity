@@ -84,6 +84,12 @@ public final class io/integrity/core/JsonWriter {
 	public final fun string (Ljava/lang/String;)Ljava/lang/String;
 }
 
+public final class io/integrity/core/KeyIds {
+	public static final field INSTANCE Lio/integrity/core/KeyIds;
+	public final fun of (Ljava/security/PublicKey;)Ljava/lang/String;
+	public final fun of ([B)Ljava/lang/String;
+}
+
 public final class io/integrity/core/Policy {
 	public static final field Companion Lio/integrity/core/Policy$Companion;
 	public synthetic fun <init> (Ljava/util/Map;Ljava/util/Set;Ljava/util/Map;IIIFZLkotlin/jvm/internal/DefaultConstructorMarker;)V

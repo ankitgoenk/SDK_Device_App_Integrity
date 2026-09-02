@@ -4,7 +4,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.Signature
@@ -200,30 +199,14 @@ public class KeystoreReportSigner(private val alias: String = DEFAULT_ALIAS) : R
         /**
          * A key id is a digest of the public key, not a random label.
          *
-         * Derived rather than stored, so it cannot drift from the key it names, and so a
-         * client cannot claim one key id while holding another: the backend recomputes it
-         * from the key it has enrolled and compares.
+         * Derived rather than stored, so it cannot drift from the key it names.
+         *
+         * This used to add "and so a client cannot claim one key id while holding another: the
+         * backend recomputes it from the key it has enrolled and compares". No backend did, and
+         * none could: the derivation lived here, in an Android library a JVM backend cannot
+         * consume. It has moved to [KeyIds] in `integrity-model`, which the backend shares
+         * verbatim, and `InMemoryEnrolledKeys.enrol` now derives the id instead of taking one.
          */
-        public fun keyIdOf(publicKey: PublicKey): String {
-            val digest = MessageDigest.getInstance("SHA-256").digest(publicKey.encoded)
-            return digest.toHexString(KEY_ID_BYTES)
-        }
-
-        /** 16 bytes of a SHA-256. Collision risk is negligible and the header stays short. */
-        private const val KEY_ID_BYTES = 16
-
-        private const val BITS_PER_NIBBLE = 4
-        private const val NIBBLE_MASK = 0xF
-        private const val BYTE_MASK = 0xFF
-
-        private fun ByteArray.toHexString(limit: Int): String {
-            val hex = "0123456789abcdef"
-            val out = StringBuilder(limit * 2)
-            for (i in 0 until minOf(limit, size)) {
-                val b = this[i].toInt() and BYTE_MASK
-                out.append(hex[b shr BITS_PER_NIBBLE]).append(hex[b and NIBBLE_MASK])
-            }
-            return out.toString()
-        }
+        public fun keyIdOf(publicKey: PublicKey): String = KeyIds.of(publicKey)
     }
 }

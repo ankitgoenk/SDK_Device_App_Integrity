@@ -5,6 +5,7 @@ import io.integrity.core.Category
 import io.integrity.core.Confidence
 import io.integrity.core.Depth
 import io.integrity.core.IntegrityReport
+import io.integrity.core.KeyIds
 import io.integrity.core.Policy
 import io.integrity.core.ReportWire
 import io.integrity.core.RiskScorer
@@ -15,7 +16,6 @@ import io.integrity.core.Verdict
 import io.integrity.core.Weight
 import java.security.KeyPair
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import org.junit.Test
@@ -35,9 +35,9 @@ class ReportVerifierTest {
         initialize(ECGenParameterSpec("secp256r1"))
     }.generateKeyPair()
 
-    private fun keyIdOf(pair: KeyPair): String = MessageDigest.getInstance("SHA-256").digest(pair.public.encoded)
-        .take(16)
-        .joinToString("") { "%02x".format(it) }
+    // Was a third hand-rolled copy of the derivation, agreeing with `KeystoreReportSigner` and
+    // with nothing pinning that it did. `KeyIds` is the one construction all three sides share.
+    private fun keyIdOf(pair: KeyPair): String = KeyIds.of(pair.public)
 
     private fun canonicalReport(signals: List<Signal>, challenge: String?): String = ReportWire.canonicalJson(
         IntegrityReport(
@@ -68,7 +68,9 @@ class ReportVerifierTest {
     }
 
     private fun registry(pair: KeyPair): InMemoryEnrolledKeys = InMemoryEnrolledKeys().apply {
-        check(enrol(keyIdOf(pair), pair.public.encoded))
+        // The id is the return value now, not an argument. Asserting it matches what the
+        // signing side derives is the comparison `keyIdOf`'s KDoc claimed and nothing did.
+        check(enrol(pair.public.encoded) == keyIdOf(pair))
     }
 
     // --- the check itself ---------------------------------------------------------------

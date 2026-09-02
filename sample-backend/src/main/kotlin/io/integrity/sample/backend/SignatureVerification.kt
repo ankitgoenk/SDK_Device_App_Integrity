@@ -2,6 +2,7 @@ package io.integrity.sample.backend
 
 import io.integrity.core.Category
 import io.integrity.core.Confidence
+import io.integrity.core.KeyIds
 import io.integrity.core.Signal
 import io.integrity.core.SignalId
 import io.integrity.core.SignedReport
@@ -9,6 +10,7 @@ import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Public keys the host has enrolled, looked up by key id.
@@ -23,15 +25,49 @@ fun interface EnrolledKeys {
     fun find(keyId: String): PublicKey?
 }
 
-/** An in-memory registry. Real deployments back this with the store enrollment writes to. */
+/**
+ * An in-memory registry. Real deployments back this with the store enrollment writes to.
+ *
+ * `ConcurrentHashMap` rather than `HashMap`: enrolment writes while verification reads, and its
+ * sibling [InMemoryChallengeStore] takes that seriously enough to explain why a read-then-write
+ * "loses roughly 3% of contended rounds". Same package, same hazard, and this one had a plain
+ * map.
+ */
 class InMemoryEnrolledKeys : EnrolledKeys {
-    private val keys = HashMap<String, PublicKey>()
+    private val keys = ConcurrentHashMap<String, PublicKey>()
 
-    /** Registers a SubjectPublicKeyInfo-encoded P-256 key. Returns false if it will not parse. */
-    fun enrol(keyId: String, encodedPublicKey: ByteArray): Boolean = runCatching {
-        keys[keyId] = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encodedPublicKey))
-        true
-    }.getOrDefault(false)
+    /**
+     * Registers a SubjectPublicKeyInfo-encoded P-256 key, returning **the id derived from it**,
+     * or null if it will not parse.
+     *
+     * ### The key id is not a parameter, deliberately
+     *
+     * It used to be: `enrol(keyId: String, encodedPublicKey: ByteArray)`, storing whatever
+     * string the caller passed. Meanwhile `keyIdOf`'s documentation said a client "cannot claim
+     * one key id while holding another: the backend recomputes it from the key it has enrolled
+     * and compares". Nothing recomputed anything, and the natural implementation of an
+     * enrolment endpoint — pass through the `{keyId, publicKey}` the client sent, as the
+     * parameter order invited — meant the id was chosen by the client outright.
+     *
+     * That is not a forgery route: claiming another key's id makes the signature verify against
+     * *that* key and fail. What it allowed was slot collision. `keys[keyId] = ...` overwrites,
+     * so one authenticated user could enrol their key under another's id, and the victim's
+     * honest reports would then fail verification and raise `SRV_REPORT_SIGNATURE_INVALID`
+     * against them.
+     *
+     * Deriving removes the input rather than validating it, so there is no comparison for a
+     * later refactor to drop. [KeyIds] is in `integrity-model` precisely so this side and the
+     * signing side cannot derive differently.
+     *
+     * **Still missing, and not fixed here:** nothing binds an enrolled key to an owner.
+     * `find` is a global lookup by the id the client claims, and [ReportVerifier.check] never
+     * reads `header.packageName` — the field carried across the signature boundary for exactly
+     * that check. Tracked as item 10 of the ADR-0006 checklist in `SERVER_VERIFICATION.md`.
+     */
+    fun enrol(encodedPublicKey: ByteArray): String? = runCatching {
+        val key = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(encodedPublicKey))
+        KeyIds.of(encodedPublicKey).also { keys[it] = key }
+    }.getOrNull()
 
     override fun find(keyId: String): PublicKey? = keys[keyId]
 }
