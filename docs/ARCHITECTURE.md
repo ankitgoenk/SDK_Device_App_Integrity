@@ -129,8 +129,11 @@ registered dynamically rather than by exported `Java_…` names.
 
 - **Custom detectors:** hosts may register their own `Detector` implementations (e.g. a
   business-specific device check) and have them scored by the same policy.
-- **Remote policy:** `Policy` is serialisable, so weights and per-signal enable flags can be
-  fetched by the host from its own config service and applied without an SDK release. The SDK
-  never fetches config itself.
+- **Remote policy:** `Policy` is immutable and composable — `withWeight`, `withDisabled`,
+  `withThresholds`, `withMinimumCoverage`, `withAdvisoryOnly` — so a host can build one from
+  values its own config service supplies and apply it at init, without an SDK release. The SDK
+  never fetches config itself. It is **not** serialisable: this line and `RISK_SCORING.md` both
+  said `Policy` "serialises to/from JSON", and no such code exists. Adding it would be a small
+  piece of work and is not one anybody has done.
 - **Signal versioning:** each `SignalId` is a stable string (`ROOT_MAGISK_PATHS`). Renaming an
   ID is a breaking change; deprecate and add instead.

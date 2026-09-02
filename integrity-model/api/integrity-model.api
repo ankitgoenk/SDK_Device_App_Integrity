@@ -98,9 +98,11 @@ public final class io/integrity/core/Policy {
 	public static final fun observability ()Lio/integrity/core/Policy;
 	public static final fun strict ()Lio/integrity/core/Policy;
 	public final fun weightOf-ZzZ-_2s (Ljava/lang/String;)Lio/integrity/core/Weight;
+	public final fun withAdvisoryOnly (Z)Lio/integrity/core/Policy;
 	public final fun withCategoryFactor (Lio/integrity/core/Category;D)Lio/integrity/core/Policy;
 	public final fun withDisabled (Ljava/util/Collection;)Lio/integrity/core/Policy;
 	public final fun withDisabled-ZzZ-_2s (Ljava/lang/String;)Lio/integrity/core/Policy;
+	public final fun withMinimumCoverage (F)Lio/integrity/core/Policy;
 	public final fun withThresholds (III)Lio/integrity/core/Policy;
 	public static synthetic fun withThresholds$default (Lio/integrity/core/Policy;IIIILjava/lang/Object;)Lio/integrity/core/Policy;
 	public final fun withWeight-9fUCPOI (Ljava/lang/String;Lio/integrity/core/Weight;)Lio/integrity/core/Policy;
