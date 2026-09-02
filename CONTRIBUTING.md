@@ -107,7 +107,8 @@ not try separately from one it failed to catch — untried is not uncaught.
 
 - [ ] Implementation in the correct module (native where a JVM implementation is trivially hookable)
 - [ ] `SignalId` constant with a stable string, plus a complete row in `docs/DETECTION_CATALOG.md`
-- [ ] Unit tests against fixtures in `integrity-testing/fixtures/`
+- [ ] Unit tests against fixtures in `integrity-testing/fixtures/` (empty today — read its
+      `README.md` before adding the first one; a capture without provenance is unusable)
 - [ ] Instrumented test: one positive condition, one clean condition
 - [ ] Where a bug would return the same result as a legitimate "couldn't verify", a
       relative property proves the check actually ran (see above)

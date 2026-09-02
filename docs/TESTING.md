@@ -8,13 +8,27 @@ support ticket from a paying customer. Both need deliberate testing.
 | Level | What | Where |
 | --- | --- | --- |
 | Unit | Parsers (`/proc/maps`, `/proc/mounts`, `/proc/net/unix`, property output), scoring, policy, canonical JSON | JVM, `integrity-*/src/test` |
-| Fixture-driven | Real captured `/proc` dumps and `PackageManager` snapshots from rooted, Frida'd, emulated and clean devices | `integrity-testing/fixtures/` |
+| Fixture-driven | Real captured `/proc` dumps and `PackageManager` snapshots from rooted, Frida'd, emulated and clean devices | `integrity-testing/fixtures/` — **empty today**, see below |
 | Instrumented | Detector behaviour on a real Android runtime | `androidTest`, Gradle-managed devices |
 | Device matrix | Full sweep across physical and virtual devices | Nightly, device farm |
 | Red team | Human attempts to bypass | Per release |
 
-**Fixtures are the backbone.** Capture once from a compromised device, replay forever in fast
-JVM tests. Every parser bug found in the field becomes a fixture.
+**Fixtures are the backbone** — which is a statement of intent, not of fact.
+`integrity-testing/fixtures/` is empty, and was a path this document pointed at before it
+existed. What the detector suites actually run against is inline strings, which is fine for logic
+and weak for reality: nobody would hand-write `/dev/ashmem/jit-zygote-cache_4112_4112 (deleted)`
+into a test, because nobody knew it existed until an Android 11 phone produced it (§9).
+
+The captures behind §9 were taken and are not in this repository. The cost is recorded there
+rather than argued here: one published figure had to be **withdrawn rather than corrected**
+"since that capture was not kept", and the ashmem fix is marked "verified by replay" against
+stored captures nobody else holds, with a follow-up gated on one person's phone.
+`integrity-testing/fixtures/README.md` names the four files that should land first and the
+provenance each needs. Until they do, treat every §9 measurement as reproducible only by the
+person who took it.
+
+The rule stands for what comes next: capture once from a compromised device, replay forever in
+fast JVM tests, and every parser bug found in the field becomes a fixture.
 
 ## 2. Positive-case rigs
 
@@ -32,8 +46,10 @@ JVM tests. Every parser bug found in the field becomes a fixture.
 | **Virtual space** | Sample app cloned into a VirtualApp-style container | `VIRT_*` |
 | **Hostile apps** | Lucky Patcher, GameGuardian, HttpCanary installed | `ENV_*` |
 
-Keep these as **documented, reproducible setups** (scripts in `tools/rigs/`), not as tribal
-knowledge on one engineer's spare phone.
+Keep these as **documented, reproducible setups**, not as tribal knowledge on one engineer's
+spare phone. `tools/rigs/` is where the scripts should go and does not exist yet; `K1`, `K2` and
+`K4` are described in §9 and built by hand. The precedent for doing better is already here —
+`tools/xposed-buildspoof-fixture/` is `K4`'s positive control and lives in this repository.
 
 > One of these rigs now exists and one clean device is paired with it. What they actually
 > observed — rather than what this table says they should — is recorded in
@@ -122,7 +138,7 @@ to look at:
 ## 8. Regression policy
 
 - Every field-reported false positive becomes a fixture plus a negative test before the fix
-  merges.
+  merges. See `integrity-testing/fixtures/README.md` for what a fixture has to carry with it.
 - Every successful bypass becomes a new detection or an explicit, documented "won't detect"
   entry in the catalog with the rationale.
 - Signal weights change only with data attached to the PR.
