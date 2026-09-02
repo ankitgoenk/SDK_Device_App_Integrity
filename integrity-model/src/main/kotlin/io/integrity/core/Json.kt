@@ -3,16 +3,24 @@ package io.integrity.core
 /**
  * The escaping half of the canonical form, extracted so the parser and the serialiser cannot
  * drift apart. [ReportWire] delegates here; its round-trip tests pin the bytes.
+ *
+ * **Public for the same reason it was extracted, one module further out.**
+ * `integrity-baseline-plugin` writes a canonical JSON file the backend compares a device report
+ * against, and its serialiser claimed "the same discipline `ReportWire` applies" while
+ * interpolating zip entry names straight between quote characters. It could not do otherwise:
+ * Kotlin's `internal` is module-scoped, so a module that merely *depends* on `integrity-model`
+ * cannot see this — which is how a second, non-escaping implementation of one format came to
+ * exist next door. Publishing it is cheaper than owning two.
  */
-internal object JsonWriter {
+public object JsonWriter {
 
     private const val BITS_PER_NIBBLE = 4
     private const val NIBBLES_PER_ESCAPE = 4
     private const val NIBBLE_MASK = 0xF
     private val HEX_DIGITS = "0123456789abcdef".toCharArray()
 
-    /** Minimal, deterministic JSON string escaping. */
-    fun string(value: String): String {
+    /** Minimal, deterministic JSON string escaping, quotes included. */
+    public fun string(value: String): String {
         val out = StringBuilder(value.length + 2)
         out.append('"')
         for (c in value) {

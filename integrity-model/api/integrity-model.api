@@ -79,6 +79,11 @@ public final class io/integrity/core/IntegrityReport$Companion {
 	public static synthetic fun unknown$default (Lio/integrity/core/IntegrityReport$Companion;Lio/integrity/core/Depth;Ljava/util/List;ILjava/lang/Object;)Lio/integrity/core/IntegrityReport;
 }
 
+public final class io/integrity/core/JsonWriter {
+	public static final field INSTANCE Lio/integrity/core/JsonWriter;
+	public final fun string (Ljava/lang/String;)Ljava/lang/String;
+}
+
 public final class io/integrity/core/Policy {
 	public static final field Companion Lio/integrity/core/Policy$Companion;
 	public synthetic fun <init> (Ljava/util/Map;Ljava/util/Set;Ljava/util/Map;IIIFZLkotlin/jvm/internal/DefaultConstructorMarker;)V
