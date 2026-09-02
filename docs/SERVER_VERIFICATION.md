@@ -202,7 +202,7 @@ as the gate.
 | 4 | Finding bound to the challenge it answers | `Decision.challenge` / `.purpose`, asserted in `VerificationServiceTest` |
 | 5 | Sensitive actions need an action-bound decision | `ChallengePurpose.satisfies`, plus a mutant that must die |
 | 6 | A client cannot extend backend freshness, only shorten it | `windowFor` uses `coerceAtMost`; extend, shorten and negative cases all tested |
-| 7 | `tsc --noEmit` over the TypeScript contract | **Not enforced.** The bridge is unbuilt; do not describe it as verified |
+| 7 | The TypeScript contract cannot offer a vocabulary the Kotlin does not | `tools/check-bridge-vocabulary.py`, plus four mutants. It kept `TRUSTED` in **both** unions after ADR-0008 and ADR-0009 removed the name, and dropped `NO_EVIDENCE_OF_COMPROMISE` from both — so this row named the wrong gate: `tsc --noEmit` type-checks a union of four wrong strings perfectly. `tsc` is still **not run**, and the bridge is still unbuilt; do not describe *that* as verified |
 | 8 | A valid signature cannot improve a finding | `ReportVerifierTest` — a signed and an unsigned submission carrying the same signals produce identical findings; two mutants in `tools/mutate-backend.py` |
 | 9 | A failed signature cannot suppress evidence | `ReportVerifierTest` — a report with a forged signature still scores `COMPROMISED` on its own signals; one mutant |
 

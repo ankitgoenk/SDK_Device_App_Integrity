@@ -34,9 +34,16 @@ jobs:
       # "BUILD (blocked)" on a dependency that had already landed.
       - run: tools/check-triage-consistency.py
 
-      # ...and the gate must be able to fail. Four deliberately broken triages, all of which
-      # it has to reject. Hard rule 10 applies to the gates themselves.
+      # ...and the gate must be able to fail. Deliberately broken triages, all of which it has
+      # to reject. Hard rule 10 applies to the gates themselves.
       - run: tools/check-triage-consistency.py --self-test
+
+      # The React Native contract is a third vocabulary alongside Kotlin's Verdict and
+      # DeviceState, and nothing pinned it: it kept `TRUSTED` in both unions long after
+      # ADR-0008 and ADR-0009 removed the name. Not `tsc --noEmit` — a union of four wrong
+      # strings type-checks perfectly; membership against the Kotlin is the property.
+      - run: tools/check-bridge-vocabulary.py
+      - run: tools/check-bridge-vocabulary.py --self-test
 
   quality:
     name: Static analysis

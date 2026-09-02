@@ -23,6 +23,38 @@ export type Confidence = 'INCONCLUSIVE' | 'POSSIBLE' | 'LIKELY' | 'CONFIRMED';
 export type Category =
   | 'ROOT' | 'HOOKING' | 'APP_TAMPER' | 'ENVIRONMENT' | 'EMULATION' | 'ATTESTATION' | 'META';
 
+/**
+ * The SDK's own summary opinion, mirroring Kotlin `Verdict` exactly.
+ *
+ * **No member means "trusted", and that is the point (ADR-0009).** The bottom rung was called
+ * `TRUSTED` until it was removed, because it made `if (verdict === 'TRUSTED') allow()` the
+ * obvious thing to write — a decision taken on the device, from unsigned local evidence, which
+ * is the single failure this architecture exists to prevent. `NO_EVIDENCE_OF_COMPROMISE` is the
+ * replacement and it is an *absence*: a healthy device and a client patched to stay silent
+ * produce it identically. Renaming was the whole defence, so do not reintroduce the old name and
+ * do not treat the new one as its synonym.
+ *
+ * `tools/check-bridge-vocabulary.py` fails the build if this drifts from the Kotlin.
+ */
+export type Verdict =
+  | 'NO_EVIDENCE_OF_COMPROMISE'
+  | 'LOW_RISK'
+  | 'SUSPICIOUS'
+  | 'COMPROMISED'
+  | 'UNKNOWN';
+
+/**
+ * What the backend's evidence service found, mirroring Kotlin `DeviceState` exactly.
+ *
+ * Three values, and there is no fourth. ADR-0008 removed attestation from that service's scope,
+ * so it holds no authenticated anchor and has no route to a positive finding about a device.
+ * `COMPROMISED` is the only thing it can assert; the other two are absences.
+ */
+export type DeviceState =
+  | 'COMPROMISED'
+  | 'NO_EVIDENCE_OF_COMPROMISE'
+  | 'INSUFFICIENT_EVIDENCE';
+
 export interface Signal {
   /** Stable identifier, e.g. `ROOT_DANGEROUS_PROPS`. Catalogued in docs/DETECTION_CATALOG.md. */
   readonly id: string;
@@ -40,7 +72,7 @@ export interface Signal {
  * compromised device can put anything here. Branch on `IntegrityDecision.decision`.
  */
 export interface ClientAdvisory {
-  readonly verdict: 'TRUSTED' | 'SUSPICIOUS' | 'COMPROMISED' | 'UNKNOWN';
+  readonly verdict: Verdict;
   readonly riskScore: number;
   readonly categoryScores: Readonly<Partial<Record<Category, number>>>;
 }
@@ -94,21 +126,38 @@ export interface Subscription {
  * trusted.
  */
 export interface IntegrityDecision {
-  readonly decision: 'TRUSTED' | 'COMPROMISED' | 'UNAVAILABLE' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * The server's finding, plus one value the server never sends.
+   *
+   * `UNAVAILABLE` is synthesised by the app when no decision could be obtained at all — the
+   * request failed, timed out, or was never made. It is deliberately distinct from
+   * `INSUFFICIENT_EVIDENCE`, which is a decision the server did reach. Neither means trusted,
+   * and neither does the third.
+   */
+  readonly decision: DeviceState | 'UNAVAILABLE';
   readonly decisionId: string;
   /**
    * The challenge this decision answers, or null.
    *
    * Unexpired is not the same as fresh. A sensitive action needs a decision bound to a
-   * challenge minted for *that action*, not merely one that has not yet timed out — a
-   * TRUSTED from app open says nothing about the device half an hour later.
+   * challenge minted for *that action*, not merely one that has not yet timed out — a finding
+   * from app open says nothing about the device half an hour later.
    */
   readonly challenge: string | null;
   readonly evaluatedAtMillis: number;
   /** Server-authoritative. A client may shorten this, never extend it. */
   readonly expiresAtMillis: number;
-  readonly actions?: readonly string[];
 }
+
+/*
+ * There is deliberately no `actions` field.
+ *
+ * It used to be here, as `actions?: readonly string[]`, and ADR-0008 had already removed it
+ * from the service that would have populated it: "No action field. This service grades
+ * evidence; it does not grant access, and an `ALLOW` it could emit would be an exoneration by
+ * another name." An optional array of action strings is the shape `includes('ALLOW')` is
+ * written against, which is exactly the read the ADR closes off.
+ */
 
 /**
  * Vocabulary for the app's own action table — deliberately two values and no operations.
@@ -143,8 +192,15 @@ export function mayProceed(
 ): boolean;
 
 /**
- * A sensitive action: the decision must answer the challenge minted for *this* operation,
- * and be unexpired, and be TRUSTED.
+ * A sensitive action: the decision must answer the challenge minted for *this* operation, and
+ * be unexpired, and not incriminate.
+ *
+ * Note what it cannot check: that the device is fine. There is no such value (ADR-0008), and
+ * `NO_EVIDENCE_OF_COMPROMISE` is not a quiet spelling of one — a healthy device and a client
+ * that suppressed every signal produce it identically (ADR-0007). So this predicate answers
+ * "did our evidence service decline to accuse this device, in an answer minted for this
+ * action, recently?" and nothing more. Passing it is a precondition for proceeding, never on
+ * its own a reason to: the caller combines it with whatever authenticated signal they hold.
  *
  * The signature is the guard rail. Without it the natural thing to write is
  *
