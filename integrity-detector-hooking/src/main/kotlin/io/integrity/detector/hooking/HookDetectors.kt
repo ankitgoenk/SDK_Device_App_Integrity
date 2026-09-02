@@ -17,6 +17,7 @@ import io.integrity.core.Weight
 public object HookDetectors {
 
     /** Every detector in this module, for [io.integrity.core.IntegrityConfig.Builder.detectors]. */
+    @JvmStatic
     public fun all(): List<Detector> = listOf(
         UnexpectedModuleDetector()
     )

@@ -6,8 +6,10 @@ import io.integrity.core.Depth
 import io.integrity.core.DetectionContext
 import io.integrity.core.Detector
 import io.integrity.core.IntegrityReport
+import io.integrity.core.Policy
 import io.integrity.core.Signal
 import io.integrity.core.SignalId
+import io.integrity.core.Weight
 
 /**
  * Reports the state of the SDK's own native core.
@@ -95,4 +97,30 @@ public object NativeDetectors {
         ),
         SelfTextDetector(expectedByHost = expected)
     )
+
+    /**
+     * Intended weight once shadow-mode data supports promotion. Not applied by default: hard
+     * rule 6 ships every new signal at `INFORMATIONAL`.
+     *
+     * This module had no such helper at all, so two of the SDK's nine live detections had no
+     * shipped route to a non-zero weight — and `RiskScorer.escalate` only sees signals weighted
+     * above `INFORMATIONAL`.
+     *
+     * **`APP_NATIVE_LIB_MISMATCH` is deliberately absent, and this is the record of that
+     * decision.** The catalogue tables it `H`, but its own row says the false-positive mode is
+     * "dependency hygiene, not device state": a stale incremental build, an `integrity-native`
+     * skewed against a newer `integrity-core`, or an enterprise wrapper rebuilding native libs
+     * all produce it with nothing malicious happening. The same row says phase 3b should report
+     * the expected and actual tokens, "without them the signal is unactionable". Promoting it
+     * before that ships hands an integrator `CONFIRMED` app-tamper evidence they cannot
+     * diagnose. Add it here in the PR that makes it diagnosable, not before.
+     *
+     * `HOOK_SELF_TEXT_MISMATCH` moves the score and not the escalation, by design: the detector
+     * caps itself at `POSSIBLE` "and never higher, on any device", and the hooking escalation
+     * rule fires only on `CONFIRMED`. `HIGH` x 0.4 is 10 points into `HOOKING`. Raising the
+     * confidence to make that rule fire would be inverting the detector's own conclusion.
+     */
+    @JvmStatic
+    public fun proposedWeights(policy: Policy): Policy = policy
+        .withWeight(SignalId.HOOK_SELF_TEXT_MISMATCH, Weight.HIGH)
 }

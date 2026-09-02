@@ -3,5 +3,6 @@ public final class io/integrity/nativecore/NativeDetectors {
 	public static final fun all ()Ljava/util/List;
 	public static final fun all (Z)Ljava/util/List;
 	public static synthetic fun all$default (ZILjava/lang/Object;)Ljava/util/List;
+	public static final fun proposedWeights (Lio/integrity/core/Policy;)Lio/integrity/core/Policy;
 }
 

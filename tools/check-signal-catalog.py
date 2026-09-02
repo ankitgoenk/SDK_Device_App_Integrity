@@ -8,6 +8,7 @@ in production code this checks:
   2. that row states a false-positive risk                   (False-positive analysis)
   3. that row states the technique and a known bypass        (Known bypass)
   4. at least one unit test references it by name            (Unit test)
+  5. some `proposedWeights` helper offers it a weight        (Promotion path)
 
 Expected result, evidence shape and "instrumented test where appropriate" stay with human
 review: a checker that guessed at those would only teach people how to satisfy the checker.
@@ -34,6 +35,23 @@ PLACEHOLDERS = {"", "-", "--", "tbd", "todo", "n/a", "na", "?", "tba", "none"}
 
 # Ids that exist only to describe the scaffold itself.
 EXEMPT: set[str] = set()
+
+# Hard rule 6 ships everything at INFORMATIONAL, and a `proposedWeights` helper is the one
+# shipped route to arming it -- so a signal missing from every helper has no promotion path at
+# all, whatever weight the catalogue tables for it.
+#
+# META_* are the SDK describing its own state rather than the device's; weighting them would
+# report the SDK's own fragility as a device finding, which is what the empty BASE_WEIGHTS
+# exists to prevent. ATT_*/SRV_* are server-side vocabulary.
+EXEMPT_FROM_WEIGHTS = ("META_", "ATT_", "SRV_")
+
+# Emitted signals with no proposed weight, and why. Anything here is a decision somebody wrote
+# down rather than a helper somebody forgot to update.
+NO_PROPOSED_WEIGHT = {
+    "APP_NATIVE_LIB_MISMATCH":
+        "false positives are dependency skew, not device state; the catalogue says phase 3b "
+        "must report expected vs actual tokens first, 'without them the signal is unactionable'",
+}
 
 
 def is_placeholder(cell: str) -> bool:
@@ -129,6 +147,34 @@ def producers() -> set[str]:
     return found
 
 
+def proposed_weights() -> dict[str, str]:
+    """Every id some module's `proposedWeights` helper offers a weight, and which weight.
+
+    The mirror of the check below. That one catches a weight with no producer -- the bug that
+    bit twice, in APP_SIGNATURE_MISMATCH and META_NATIVE_UNAVAILABLE. This catches a producer
+    with no weight, the same defect reflected: APP_DEX_DIGEST_MISMATCH shipped, sat in
+    `RiskScorer.DECISIVE_SIGNALS`, was called "escalates decisively" in four documents, and no
+    shipped code path could raise it above INFORMATIONAL.
+    """
+    found: dict[str, str] = {}
+    # Every main source, not `*Detectors.kt`: the first cut globbed on the filename and missed
+    # `NativeDetectors`, which lives in `NativeIntegrityDetector.kt`. A parser that silently
+    # inspects fewer files than it claims reports a clean bill of health it did not earn --
+    # here it did the opposite, and said so, which is the only reason the glob was noticed.
+    for path in ROOT.rglob("*.kt"):
+        text = str(path)
+        if "/build/" in text or "/src/main/" not in text:
+            continue
+        source = strip_comments(path.read_text(encoding="utf-8"))
+        body = re.search(r"fun\s+proposedWeights\b.*", source, re.S)
+        if body is None:
+            continue
+        found.update(
+            re.findall(r"SignalId\.([A-Z][A-Z0-9_]+)\s*,\s*Weight\.([A-Z]+)", body.group(0))
+        )
+    return found
+
+
 def default_weights() -> dict[str, str]:
     """Weights the default policy applies out of the box."""
     text = POLICY.read_text(encoding="utf-8")
@@ -169,9 +215,23 @@ def main() -> int:
         if name not in tested:
             problems.append(f"{name}: no unit test references it by name.")
 
+    emitted = producers()
+
+    # And the mirror: a producer with no weight has no promotion path at all, so every document
+    # calling it decisive describes something no shipped code can do.
+    proposed = proposed_weights()
+    for name in sorted(emitted):
+        if name.startswith(EXEMPT_FROM_WEIGHTS) or name in NO_PROPOSED_WEIGHT:
+            continue
+        if name not in proposed:
+            problems.append(
+                f"{name}: emitted by a detector, but no `proposedWeights` helper offers it a "
+                f"weight, so nothing can promote it above INFORMATIONAL. Add it to its module's "
+                f"helper, or to NO_PROPOSED_WEIGHT with the reason."
+            )
+
     # A weight configured before its producer exists is inert until the detector ships,
     # then activates silently. It has bitten this project twice; make it a build failure.
-    emitted = producers()
     for name, weight in sorted(default_weights().items()):
         if weight != "INFORMATIONAL" and name not in emitted:
             problems.append(
