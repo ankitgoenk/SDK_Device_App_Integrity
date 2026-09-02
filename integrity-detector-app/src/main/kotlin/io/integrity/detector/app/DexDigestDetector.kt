@@ -16,7 +16,10 @@ import io.integrity.core.SignalId
  *
  * **Expected result.** `CONFIRMED` when a baseline is configured and the measurement differs —
  * this id is in `RiskScorer.DECISIVE_SIGNALS`, so a confirmed instance escalates to
- * `COMPROMISED` on its own. `INCONCLUSIVE` in every case where the comparison could not be
+ * `COMPROMISED` on its own — **once it carries a weight above `INFORMATIONAL`**, which
+ * `AppDetectors.proposedWeights` is the shipped route to. `RiskScorer.escalate` never sees an
+ * unpromoted signal, so until a host composes that helper this fires and scores zero.
+ * `INCONCLUSIVE` in every case where the comparison could not be
  * made, with the reason attached, because a check that could not run is not a clean result.
  *
  * ### The baseline comes from outside, and that is the whole design

@@ -97,7 +97,7 @@ before anyone had seen its false-positive rate. Promoting the weight (for exampl
 | Rule | Effect |
 | --- | --- |
 | Any `CONFIRMED` signal in `hooking` | `verdict ≥ COMPROMISED` |
-| `APP_SIGNATURE_MISMATCH` or `APP_DEX_DIGEST_MISMATCH` `CONFIRMED` | `verdict = COMPROMISED` |
+| `APP_SIGNATURE_MISMATCH` or `APP_DEX_DIGEST_MISMATCH` `CONFIRMED` | `verdict = COMPROMISED` (both weighted by `AppDetectors.proposedWeights`) |
 | `ATT_APP_NOT_RECOGNISED` (server) | `verdict = COMPROMISED` |
 | `META_NATIVE_UNAVAILABLE` | `verdict ≥ SUSPICIOUS`, score floor 50 |
 | ≥ 2 categories scoring ≥ 40 | `verdict ≥ SUSPICIOUS` (correlated evidence beats any single heuristic) |

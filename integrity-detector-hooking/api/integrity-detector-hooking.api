@@ -1,6 +1,6 @@
 public final class io/integrity/detector/hooking/HookDetectors {
 	public static final field INSTANCE Lio/integrity/detector/hooking/HookDetectors;
-	public final fun all ()Ljava/util/List;
+	public static final fun all ()Ljava/util/List;
 	public static final fun proposedWeights (Lio/integrity/core/Policy;)Lio/integrity/core/Policy;
 }
 
