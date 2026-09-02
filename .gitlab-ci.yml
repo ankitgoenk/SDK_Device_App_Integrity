@@ -1,0 +1,443 @@
+# GitLab mirror of .github/workflows/ci.yml.
+#
+# Same gates, same order, same failure conditions. Where GitHub supplied something through
+# its runner image or a marketplace action, that thing is spelled out here instead:
+#
+#   actions/setup-java            -> the eclipse-temurin image
+#   actions/setup-python          -> python3 from apt
+#   android-actions/setup-android -> .install_android_sdk below
+#   gradle/actions/setup-gradle   -> cache: of GRADLE_USER_HOME
+#   actions/upload-artifact       -> artifacts:
+#   emulator-runner               -> .emulator below
+#   concurrency/cancel-in-progress-> interruptible: plus the project's
+#                                    "auto-cancel redundant pipelines" setting
+#
+# The one thing GitHub gave for free that a runner here may not: /dev/kvm. The three
+# emulator jobs need it and are tagged `kvm`. They FAIL rather than skip when it is absent
+# — hard rule 10 applies to the CI translation too, and a device gate that quietly no-ops
+# is worse than not having claimed to run it.
+
+variables:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+  # GitLab can only cache paths inside the project directory.
+  GRADLE_USER_HOME: $CI_PROJECT_DIR/.gradle
+  ANDROID_HOME: $CI_PROJECT_DIR/.android-sdk
+  ANDROID_SDK_ROOT: $CI_PROJECT_DIR/.android-sdk
+  # Keep in step with IntegrityBuild.kt. COMPILE_SDK 35, NDK and CMake pinned there so
+  # every machine builds the same .so; CI must not float them independently.
+  ANDROID_COMPILE_SDK: "35"
+  ANDROID_BUILD_TOOLS: "35.0.0"
+  ANDROID_NDK_VERSION: "27.0.12077973"
+  ANDROID_CMAKE_VERSION: "3.22.1"
+  CMDLINE_TOOLS_ZIP: commandlinetools-linux-11076708_latest.zip
+  JDK_IMAGE: eclipse-temurin:17-jdk
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Without this, a branch with an open MR builds twice: once detached, once as a branch.
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - verify
+  - build
+  - device
+
+# --- shared fragments --------------------------------------------------------
+
+.apt:
+  before_script:
+    - apt-get update -qq
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends
+        curl unzip python3 ca-certificates git > /dev/null
+
+# The SDK is installed into the project directory and cached rather than baked into an
+# image, so this file works on a stock runner on day one. Once it is green, bake an image
+# and push it to the project's container registry — the install below is ~2 minutes a job.
+.install_android_sdk:
+  script:
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+        mkdir -p "$ANDROID_HOME/cmdline-tools"
+        curl -fsSL -o /tmp/cmdline-tools.zip \
+          "https://dl.google.com/android/repository/$CMDLINE_TOOLS_ZIP"
+        unzip -q /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
+        mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+      fi
+      export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+      yes | sdkmanager --licenses > /dev/null 2>&1 || true
+      sdkmanager --install \
+        "platform-tools" \
+        "platforms;android-$ANDROID_COMPILE_SDK" \
+        "build-tools;$ANDROID_BUILD_TOOLS" > /dev/null
+      SCRIPT
+
+.android:
+  image: $JDK_IMAGE
+  interruptible: true
+  cache:
+    key:
+      files:
+        - gradle/wrapper/gradle-wrapper.properties
+        - gradle/libs.versions.toml
+    paths:
+      - .gradle/caches
+      - .gradle/wrapper
+      - .android-sdk
+    policy: pull-push
+  before_script:
+    - !reference [.apt, before_script]
+    - !reference [.install_android_sdk, script]
+    - export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+# integrity.enableNative=true is set in gradle.properties, so :integrity-native is in the
+# build for every Gradle invocation. The NDK and CMake are pinned in IntegrityBuild.kt.
+.android_ndk:
+  extends: .android
+  before_script:
+    - !reference [.android, before_script]
+    - sdkmanager --install "ndk;$ANDROID_NDK_VERSION" "cmake;$ANDROID_CMAKE_VERSION" > /dev/null
+
+# Emulator jobs. `tags: [kvm]` must match a runner that exposes /dev/kvm — a Docker
+# executor with `devices = ["/dev/kvm"]` and privileged = true, or a shell executor on
+# bare metal. GitLab.com's SaaS shared runners do NOT provide KVM.
+.emulator:
+  extends: .android_ndk
+  stage: device
+  tags:
+    - kvm
+  variables:
+    EMULATOR_TARGET: google_apis
+  before_script:
+    - !reference [.android_ndk, before_script]
+    # A missing /dev/kvm must stop the pipeline here. Left to the emulator it would surface
+    # as a timeout or, worse, as a software-rendered boot that never completes while the
+    # job still reports whatever ran before it.
+    - test -w /dev/kvm || { echo "FAIL: /dev/kvm is not available on this runner"; exit 1; }
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+      img="system-images;android-$API_LEVEL;$EMULATOR_TARGET;x86_64"
+      sdkmanager --install "emulator" "platforms;android-$API_LEVEL" "$img" > /dev/null
+      echo no | avdmanager create avd -n ci -k "$img" --force
+      emulator -avd ci -no-window -no-audio -no-boot-anim -no-snapshot \
+        -gpu swiftshader_indirect -accel on &
+      adb wait-for-device
+      # getprop rather than a fixed sleep: boot time varies by API level and image.
+      timeout 600 adb shell 'while [ "$(getprop sys.boot_completed)" != "1" ]; do sleep 2; done'
+      adb shell input keyevent 82 || true
+      adb devices
+      SCRIPT
+  after_script:
+    - adb -s emulator-5554 emu kill || true
+
+# --- verify ------------------------------------------------------------------
+
+catalog:
+  stage: verify
+  image: python:3.12-slim
+  interruptible: true
+  script:
+    # Every SignalId in code must have a documented technique, weight, FP analysis
+    # and known bypass in docs/DETECTION_CATALOG.md.
+    - tools/check-signal-catalog.py
+
+    # The module tables in README and ARCHITECTURE must match settings.gradle.kts. Both
+    # silently omitted integrity-model for a whole PR after it was added.
+    - tools/check-doc-drift.py
+
+    # DETECTION_TRIAGE's BUILT verdicts must match the signals the SDK actually emits, and
+    # its census must add up. APP_DEX_DIGEST_MISMATCH shipped and the triage still called it
+    # "BUILD (blocked)" on a dependency that had already landed.
+    - tools/check-triage-consistency.py
+
+    # ...and the gate must be able to fail. Four deliberately broken triages, all of which
+    # it has to reject. Hard rule 10 applies to the gates themselves.
+    - tools/check-triage-consistency.py --self-test
+
+quality:
+  stage: verify
+  extends: .android
+  script:
+    # --no-configuration-cache: the ktlint Gradle plugin (12.2.0) holds a Project
+    # reference in its task state, which the configuration cache cannot serialize
+    # (124 problems). Scoped to this job so the cache still benefits the real build.
+    - ./gradlew detekt ktlintCheck --no-configuration-cache
+
+mutation:
+  stage: verify
+  extends: .android
+  # Breaks one guard at a time in the challenge store, the decision pipeline and the
+  # decision policy, and requires every mutant to be caught. The in-suite anti-vacuity
+  # tests catch wholesale breakage; this catches the edits that look like refactors —
+  # a >= flipped to >, a TTL widened, a compare-and-set rewritten as read-then-write.
+  #
+  # Its own job because it runs the test task once per mutant. In parallel with the rest,
+  # so it adds wall-clock only if it turns out to be the slowest lane.
+  script:
+    - tools/mutate-backend.py
+
+native-host:
+  stage: verify
+  image: $JDK_IMAGE
+  interruptible: true
+  before_script:
+    - !reference [.apt, before_script]
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential > /dev/null
+  script:
+    # The pure half of the native core carries no Android headers precisely so it can be
+    # tested here. Logic that can only run on a device is logic that rarely gets run.
+    # -fno-exceptions matches what the .so is built with. Syntax-checking under the flag
+    # is not the same as running under it, and the host suite is where the read path's
+    # positive direction is asserted.
+    - tools/run-native-tests.sh plain native_host_test
+
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      # Type-check the JNI boundary against the host JDK headers.
+      g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -fsyntax-only \
+        -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+        -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' \
+        integrity-native/src/main/cpp/integrity.cpp
+      SCRIPT
+
+    # uintptr_t is 32-bit on armeabi-v7a and 64-bit on arm64-v8a, and the overflow
+    # guards are the code most sensitive to that difference. Every test so far has run
+    # at 64 bits — the x86_64 emulator included — so the width this SDK actually ships
+    # to on 32-bit devices had never executed these paths. gcc-multilib closes that in
+    # seconds; if it ever turns fragile, an armeabi-v7a on-device path is the more
+    # representative replacement.
+    - DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gcc-multilib g++-multilib > /dev/null
+    - tools/run-native-tests.sh m32 native_host_test
+
+    - tools/run-native-tests.sh plain native_property_test
+    - tools/run-native-tests.sh m32 native_property_test
+
+    - tools/run-native-tests.sh asan
+
+    - tools/mutate-native.py
+
+    # ANDROID_STL=none provides no libc++ at all, so <cstddef> and friends do not exist
+    # — only the libc headers do. -nostdinc++ reproduces that in seconds here instead of
+    # two minutes into an NDK build. Added after exactly this slipped through: the host
+    # check used -fno-exceptions but still had libstdc++ headers on the include path.
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      for f in maps.cpp safe_read.cpp selfcheck.cpp selftext.cpp; do
+        g++ -std=c++17 -Wall -Wextra -Werror -fno-exceptions -nostdinc++ -fsyntax-only \
+          -DINTEGRITY_BUILD_TOKEN='"ci-host-token"' "integrity-native/src/main/cpp/$f"
+        echo "$f builds without libc++"
+      done
+      SCRIPT
+
+# --- build -------------------------------------------------------------------
+
+api:
+  stage: build
+  extends: .android_ndk
+  # Fails when the committed api/*.api dumps no longer match the source.
+  # Regenerate deliberately with ./gradlew apiDump and review the diff.
+  script:
+    - ./gradlew apiCheck
+
+build:
+  stage: build
+  extends: .android_ndk
+  script:
+    - ./gradlew assemble testDebugUnitTest test lint
+
+    # A green `test` also describes a module that dropped out of the build, a misconfigured
+    # source set, or a suite filtered to nothing. The instrumented lanes have had a gate for
+    # this since the root job shipped running zero tests; the JVM lane never did. Naming the
+    # suites rather than asserting a total means a deleted suite fails here instead of
+    # quietly lowering a number nobody reads.
+    - >-
+      tools/check-unit-tests-ran.py
+      io.integrity.core.RiskScorerTest
+      io.integrity.core.ReportWireTest
+      io.integrity.core.IntegrityReportTest
+      io.integrity.core.DetectionEngineTest
+      io.integrity.core.IntegrityGuardTest
+      io.integrity.core.ReportCacheTest
+      io.integrity.core.IntegrityConfigTest
+      io.integrity.sample.backend.InMemoryChallengeStoreTest
+      io.integrity.sample.backend.AntiVacuityTest
+      io.integrity.sample.backend.VerificationServiceTest
+
+    # Assert the shipped .so is stripped, unexported, budgeted and hardened.
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      # Assert on the AAR, not on build intermediates. Globbing intermediates picks up
+      # pre-strip stages that were never going to ship, which is a property of the
+      # build directory rather than of the artifact.
+      aar=$(find integrity-native/build/outputs/aar -name '*-release.aar' | head -1)
+      test -n "$aar"
+      echo "inspecting $aar"
+      rm -rf /tmp/aar && mkdir -p /tmp/aar
+      unzip -q -o "$aar" -d /tmp/aar
+      mapfile -t libs < <(find /tmp/aar/jni -name 'libintegrity.so' | sort)
+      echo "shipped ABIs: ${#libs[@]}"
+      test "${#libs[@]}" -eq 3
+      for so in "${libs[@]}"; do
+        tools/check-native-hardening.sh "$so"
+      done
+      SCRIPT
+
+    # Hard rule 5 and ADR-0003, checked on the artifact rather than asserted in a
+    # document. Not proof against reflection or dlsym — see the script — but it turns
+    # "add a network call" from typing a line into deliberately hiding one.
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      tools/check-no-network.sh --self-test
+      # integrity-model publishes a jar, not an aar. The aar-only glob left the one module
+      # whose whole purpose is to be consumed by a server outside the gate that says the
+      # SDK performs no network IO. integrity-baseline-plugin is a jar too and is covered
+      # deliberately: it is published, so "nothing shipped" should mean it.
+      mapfile -t artifacts < <(
+        find . \( -path '*/build/outputs/aar/*-release.aar' \
+               -o \( -path '*/build/libs/*.jar' -not -name '*-sources.jar' \
+                                                -not -name '*-javadoc.jar' \) \) \
+             -not -path './sample*' -not -path './build-logic/*' | sort
+      )
+      # A find that matches nothing would otherwise pass a zero-length list and succeed.
+      test "${#artifacts[@]}" -ge 2 \
+        || { echo "gate found ${#artifacts[@]} artifact(s); expected >= 2" >&2; exit 1; }
+      # One invocation, so the closing "nothing shipped can name a networking API" is
+      # printed once and is true of everything inspected. Called per artifact it printed
+      # that global claim after each one, having checked only that one.
+      tools/check-no-network.sh "${artifacts[@]}"
+      echo "no-network gate inspected ${#artifacts[@]} shipped artifact(s)"
+      SCRIPT
+
+native-size-guard:
+  stage: build
+  extends: .android_ndk
+  # The measurement job that informed this decision has become the guard that keeps
+  # it. It builds the production sources unmodified — the previous version generated
+  # rewritten variant copies, and this PR's changes would have made those rewrites
+  # silently match nothing while the job still reported three sizes.
+  script:
+    - tools/check-native-size.sh arm64-v8a
+
+# --- device ------------------------------------------------------------------
+
+instrumented:
+  extends: .emulator
+  variables:
+    API_LEVEL: "34"
+    # google_apis is a userdebug image: it ships su and reports test-keys, so the
+    # root detectors fire here. Clean-only tests are excluded and run in the
+    # clean-baseline job against a release-keys image instead.
+    EMULATOR_TARGET: google_apis
+  script:
+    # The measurement's numbers go to logcat, so they are dumped into the job log
+    # afterwards. A passing assertion proves differing == 0; the counts are what say
+    # how much was actually inspected to reach it, and PR #12 exists to record them.
+    # && rather than separate lines, so the logcat dump cannot mask a failing test.
+    - >-
+      ./gradlew connectedDebugAndroidTest
+      -Pandroid.testInstrumentationRunnerArguments.notAnnotation=io.integrity.detector.root.CleanDeviceOnly
+      && adb logcat -d -s IntegritySelfText:I
+
+    # connectedAndroidTest reports success when it runs zero tests, so this job used to
+    # pass while executing no root tests at all: the module's only instrumented test was
+    # CleanDeviceOnly and was filtered out above. Named expectations rather than
+    # inference, so deleting a module's last test fails here instead of going quiet.
+    - >-
+      tools/check-instrumented-coverage.py
+      integrity-native integrity-detector-root integrity-detector-app sample-app
+      integrity-core
+  artifacts:
+    when: always
+    name: instrumented-reports
+    paths:
+      - "**/build/reports/androidTests/"
+
+consumer:
+  extends: .emulator
+  variables:
+    API_LEVEL: "34"
+    EMULATOR_TARGET: google_apis
+  script:
+    - ./gradlew publishAllPublicationsToLocalRepoRepository
+    - find build/local-maven -name '*.aar' -o -name '*.pom' | sort
+
+    # sample-consumer is a separate Gradle build, so these coordinates can only resolve
+    # from the AARs published above. R8 is on for the release build, which is what
+    # exercises the consumer ProGuard rules shipped inside the AAR.
+    - ./gradlew -p sample-consumer assembleDebug assembleRelease assembleDebugAndroidTest
+
+    # Assert the ADR-0004 queries merged in from the AAR.
+    - |
+      bash -s <<'SCRIPT'
+      set -euo pipefail
+      mapfile -t manifests < <(find sample-consumer/build -path '*merged_manifest*' \
+        -name 'AndroidManifest.xml' ! -path '*ndroidTest*')
+      echo "found ${#manifests[@]} merged manifest(s)"
+      test "${#manifests[@]}" -gt 0
+      for m in "${manifests[@]}"; do
+        echo "--- $m"
+        grep -q 'com.topjohnwu.magisk' "$m" \
+          || { echo "FAIL: detector-environment <queries> did not merge into $m"; exit 1; }
+        grep -q 'com.guoshi.httpcanary' "$m" \
+          || { echo "FAIL: MITM-proxy queries entry missing from $m"; exit 1; }
+        if grep -q 'QUERY_ALL_PACKAGES' "$m"; then
+          echo "FAIL: QUERY_ALL_PACKAGES must never be declared (ADR-0004)"; exit 1
+        fi
+      done
+      SCRIPT
+
+    - ./gradlew -p sample-consumer connectedDebugAndroidTest
+  artifacts:
+    when: always
+    name: consumer-reports
+    paths:
+      - sample-consumer/build/reports/
+
+clean-baseline:
+  extends: .emulator
+  # Two API levels, because one is how the ashmem false positive shipped. Android 11
+  # allocates ART's JIT cache from ashmem and Android 13+ from memfd, so a detector reading
+  # /proc/self/maps sees a different set of executable regions on each. The single API 34
+  # image could not have caught it, and did not: the bug was found on a physical Android 11
+  # phone after merge. 30 is the lowest level with a google_apis_playstore x86_64 image;
+  # minSdk is 24, so eight levels below this remain uncovered and that is a known gap.
+  #
+  # google_apis_playstore is a release-keys image without su, so it is the closest
+  # thing to a stock device available in CI. If a root detector fires here, that is a
+  # finding about the detector being too broad, not a flaky job.
+  parallel:
+    matrix:
+      - API_LEVEL: ["30", "34"]
+  variables:
+    EMULATOR_TARGET: google_apis_playstore
+  script:
+    # The native suite runs here as well as on the rooted image, because the self-text
+    # measurement has to hold on both. A clean release-keys image is the one where a
+    # mismatch would be most damning: it would mean the HOOK_SELF_TEXT_MISMATCH design
+    # rests on an assumption that is simply false.
+    - >-
+      ./gradlew :integrity-detector-root:connectedDebugAndroidTest
+      -Pandroid.testInstrumentationRunnerArguments.annotation=io.integrity.detector.root.CleanDeviceOnly
+      && ./gradlew :integrity-native:connectedDebugAndroidTest
+      && adb logcat -d -s IntegritySelfText:I
+
+    # An annotation filter that matched nothing would make this negative control pass
+    # without ever running on the clean image — the strongest possible "no root signals
+    # fired" result, and completely worthless.
+    - tools/check-instrumented-coverage.py integrity-detector-root integrity-native
+  artifacts:
+    when: always
+    # Matrix legs upload in parallel; a shared name makes the second upload fail.
+    name: clean-baseline-reports-api$API_LEVEL
+    paths:
+      - integrity-detector-root/build/reports/androidTests/
