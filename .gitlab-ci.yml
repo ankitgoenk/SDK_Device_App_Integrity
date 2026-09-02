@@ -156,9 +156,16 @@ catalog:
     # "BUILD (blocked)" on a dependency that had already landed.
     - tools/check-triage-consistency.py
 
-    # ...and the gate must be able to fail. Four deliberately broken triages, all of which
-    # it has to reject. Hard rule 10 applies to the gates themselves.
+    # ...and the gate must be able to fail. Deliberately broken triages, all of which it has
+    # to reject. Hard rule 10 applies to the gates themselves.
     - tools/check-triage-consistency.py --self-test
+
+    # The React Native contract is a third vocabulary alongside Kotlin's Verdict and
+    # DeviceState, and nothing pinned it: it kept `TRUSTED` in both unions long after
+    # ADR-0008 and ADR-0009 removed the name. Not `tsc --noEmit` — a union of four wrong
+    # strings type-checks perfectly; membership against the Kotlin is the property.
+    - tools/check-bridge-vocabulary.py
+    - tools/check-bridge-vocabulary.py --self-test
 
 quality:
   stage: verify
@@ -267,6 +274,9 @@ build:
       io.integrity.core.IntegrityGuardTest
       io.integrity.core.ReportCacheTest
       io.integrity.core.IntegrityConfigTest
+      io.integrity.core.SignedReportTest
+      io.integrity.core.SignedReportsTest
+      io.integrity.sample.backend.ReportVerifierTest
       io.integrity.sample.backend.InMemoryChallengeStoreTest
       io.integrity.sample.backend.AntiVacuityTest
       io.integrity.sample.backend.VerificationServiceTest
