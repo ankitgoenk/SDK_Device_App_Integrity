@@ -122,6 +122,30 @@ class BaselineComputerTest {
     }
 
     @Test
+    fun `entry names containing json metacharacters are escaped`() {
+        // The format constrains an entry name only at its ends -- starts with `classes` and
+        // ends with `.dex`, or starts with `lib/` and ends with `.so` -- and the zip format
+        // permits `"` and `\` in between. Interpolating one raw between quote characters
+        // produced a document no parser accepts, and nothing here parses its own output, so
+        // the task logged success and the break would have surfaced at the backend, on a
+        // release that had already shipped.
+        //
+        // Assertions are on the escaped fragment rather than the whole document: the
+        // byte-exact test below already pins that safe input is unchanged.
+        val hostile = archive(
+            "classes.dex" to "first",
+            """classes\2.dex""" to "second",
+            """lib/arm64-v8a/lib"q".so""" to "native"
+        )
+
+        val json = BaselineComputer.compute(hostile, """io.integrity."sample".app""").toJson()
+
+        assertThat(json).contains("""classes\\2.dex""")
+        assertThat(json).contains("""lib/arm64-v8a/lib\"q\".so""")
+        assertThat(json).contains("""io.integrity.\"sample\".app""")
+    }
+
+    @Test
     fun `canonical json is sorted and stable`() {
         val json = Baseline(
             packageName = "p",

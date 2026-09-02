@@ -1,7 +1,9 @@
 package io.integrity.baseline
 
 import io.integrity.core.DexAggregate
+import io.integrity.core.JsonWriter
 import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
@@ -19,37 +21,53 @@ public data class Baseline(
 ) {
 
     /**
-     * Canonical JSON: keys sorted, no insignificant whitespace.
-     *
-     * The same discipline `ReportWire` applies for the same reason — this file is compared
-     * against something a device reports, and a representation that can render two ways
-     * makes a comparison that can answer two ways.
-     */
-    /**
      * The value a device compares against, computed by [DexAggregate] — the same code the
      * client runs. A second implementation here is how the build and the device would come to
      * disagree about identical bytes.
      */
     public val dexAggregate: String? get() = DexAggregate.of(dex)
 
+    /**
+     * Canonical JSON: keys sorted, no insignificant whitespace, every string escaped.
+     *
+     * The same discipline `ReportWire` applies for the same reason — this file is compared
+     * against something a device reports, and a representation that can render two ways makes
+     * a comparison that can answer two ways.
+     *
+     * **It said that while not doing it.** Keys and `packageName` were interpolated raw
+     * between quote characters, so an entry name containing `"` or `\` produced a document no
+     * parser accepts. Three of the four interpolated values are hex from `MessageDigest` and
+     * could not; the fourth is a zip entry name, which the format constrains only at its ends
+     * (`classes*.dex`, `lib/**.so`) and not in between. It does not fire on an ordinary build,
+     * and the failure if it ever did would be silent and late: nothing here parses its own
+     * output, so the task logs success, the artifact publishes, and the break surfaces at the
+     * backend on a release that has already shipped. `IntegrityBaselineTask` already refuses
+     * to write a *vacuous* baseline — "a file that looks like a comparison and can never
+     * disagree with anything" — and a malformed one is that same file by another route.
+     *
+     * Escaping goes through [JsonWriter], which `ReportWire` uses, rather than a second
+     * implementation: "a writer and a reader with independent notions of what `\u001f` means"
+     * is the hazard that extraction exists to remove, and this file is the reader's input.
+     */
     public fun toJson(): String = buildString {
-        // Escaped rather than raw strings: the separators here are almost all quotes, and
-        // counting them inside a raw literal is how the first version emitted a doubled one.
         // Keys stay lexicographically sorted: dex < dexAggregate < nativeLibs < packageName.
-        append("{\"dex\":")
+        append("{")
+        append(JsonWriter.string("dex")).append(":")
         appendMap(dex)
-        append(",\"dexAggregate\":\"")
-        append(dexAggregate ?: "")
-        append("\",\"nativeLibs\":")
+        append(",").append(JsonWriter.string("dexAggregate")).append(":")
+        append(JsonWriter.string(dexAggregate ?: ""))
+        append(",").append(JsonWriter.string("nativeLibs")).append(":")
         appendMap(nativeLibs)
-        append(",\"packageName\":\"")
-        append(packageName)
-        append("\"}")
+        append(",").append(JsonWriter.string("packageName")).append(":")
+        append(JsonWriter.string(packageName))
+        append("}")
     }
 
     private fun StringBuilder.appendMap(entries: Map<String, String>) {
         append(
-            entries.entries.sortedBy { it.key }.joinToString(",", "{", "}") { (k, v) -> "\"$k\":\"$v\"" }
+            entries.entries.sortedBy { it.key }.joinToString(",", "{", "}") { (k, v) ->
+                "${JsonWriter.string(k)}:${JsonWriter.string(v)}"
+            }
         )
     }
 }
@@ -102,7 +120,10 @@ public object BaselineComputer {
         else -> null
     }
 
-    private fun sha256(stream: java.io.InputStream): String {
+    // Duplicated, byte for byte, by `ApkDexMeasurement.sha256` in `integrity-detector-app` —
+    // the two halves whose whole point, per `DexAggregate`, is that they cannot compute
+    // differently. Both should move next to `DexAggregate` in `integrity-model`.
+    private fun sha256(stream: InputStream): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val buffer = ByteArray(BUFFER_BYTES)
         while (true) {
