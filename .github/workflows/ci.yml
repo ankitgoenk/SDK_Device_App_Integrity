@@ -131,6 +131,9 @@ jobs:
             io.integrity.core.IntegrityGuardTest \
             io.integrity.core.ReportCacheTest \
             io.integrity.core.IntegrityConfigTest \
+            io.integrity.core.SignedReportTest \
+            io.integrity.core.SignedReportsTest \
+            io.integrity.sample.backend.ReportVerifierTest \
             io.integrity.sample.backend.InMemoryChallengeStoreTest \
             io.integrity.sample.backend.AntiVacuityTest \
             io.integrity.sample.backend.VerificationServiceTest
