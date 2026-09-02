@@ -122,25 +122,50 @@ ran, and a backend should treat it as `UNKNOWN`.
 
 ## Built-in policies
 
-| Policy | Intended for | Character |
+**A built-in policy carries thresholds, a coverage floor and an advisory flag. None of them
+carries signal weights**, and that is hard rule 6 rather than an omission: a weight configured
+before its detector exists is inert until the detector ships and then live without anyone
+deciding, which has happened here twice. Weights arrive with their detector, through the
+`proposedWeights` helper its module publishes, and the host composes them.
+
+| Policy | Intended for | What it actually changes |
 | --- | --- | --- |
-| `Policy.observability()` | Rollout / shadow mode | All signals enabled, all weights recorded, **verdict always advisory**; nothing escalates |
-| `Policy.balanced()` | Most apps | The defaults above |
-| `Policy.strict()` | Banking, wallets, high-value payments | Higher weights for `environment`, `ENV_ACCESSIBILITY_SERVICE` and `ENV_OVERLAY_DETECTED` promoted, `UNKNOWN` treated as risk |
-| `Policy.gaming()` | Anti-cheat | `ENV_MEMORY_EDITOR`, `VIRT_*`, `EMU_*` weighted up; `ENV_USER_CA_INSTALLED` down |
+| `Policy.balanced()` | Most apps | The thresholds and floor above |
+| `Policy.observability()` | Rollout / shadow mode | `advisoryOnly`: thresholds alone decide, **nothing escalates** |
+| `Policy.strict()` | Banking, wallets, high-value payments | Thresholds 10 / 30 / 65, minimum coverage 0.7 |
+| `Policy.gaming()` | Anti-cheat | **Nothing yet — identical to `balanced()`.** See below |
+
+`Policy.gaming()` is documented here as it stands, not as intended. It was
+`balanced().withCategoryFactor(EMULATION, 1.0).withCategoryFactor(ENVIRONMENT, 1.0)`, and 1.0
+is the default `factorOf` returns, so it scored identically to `balanced` for every input while
+this table claimed it weighted `ENV_MEMORY_EDITOR`, `EMU_*` and `VIRT_*` up. It cannot: no
+detector emits any of them, and pre-loading their weights is the landmine above. When phases 5
+and 6 land, their weights arrive with them and this composes them.
+
+**`withCategoryFactor` damps; it cannot amplify.** The factor is clamped to `0.0..1.0`, and 1.0
+is the default — so "weighted up" was never expressible through it. The clamp protects the
+noisy-OR: once `factor * score` exceeds 100 the survival term goes negative, stops being a
+probability, and monotonicity is lost. To make a signal count for more, weight the *signal*.
 
 Policies are data, not code:
 
 ```kotlin
-val policy = Policy.balanced()
-    .withWeight(SignalId.ENV_ADB_ENABLED, Weight.INFORMATIONAL)
-    .withDisabled(SignalId.ROOT_SU_EXEC)
+val policy = AppDetectors.proposedWeights(Policy.balanced())
+    .withWeight(SignalId.ROOT_DANGEROUS_PROPS, Weight.INFORMATIONAL)
+    .withDisabled(SignalId.ROOT_SU_BINARY)
     .withThresholds(suspicious = 35, compromised = 70)
+    .withMinimumCoverage(0.7f)
 ```
 
-`Policy` serialises to/from JSON so the **host** can fetch tuned weights from its own config
-service and apply them at init — no SDK release needed to defuse a misbehaving signal.
-(The SDK itself performs no network IO; the host supplies the JSON.)
+Every id in that example is a `SignalId` constant that exists. An earlier version used
+`SignalId.ENV_ADB_ENABLED` and `SignalId.ROOT_SU_EXEC`, neither of which does — catalogue rows
+are not constants, and the snippet did not compile. An integrator can still weight a
+catalogue-only id by constructing it: `SignalId("ATT_DEVICE_INTEGRITY_FAIL")`.
+
+`Policy` is **not** serialisable today, and this document said it was ("serialises to/from JSON
+so the host can fetch tuned weights from its own config service"). There is no such code. The
+composition above is the supported route, and the host applies it at init; the SDK still fetches
+nothing itself (ADR-0003).
 
 ## False-positive discipline
 

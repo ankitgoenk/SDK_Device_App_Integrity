@@ -125,6 +125,7 @@ jobs:
         run: |
           tools/check-unit-tests-ran.py \
             io.integrity.core.RiskScorerTest \
+            io.integrity.core.PolicyTest \
             io.integrity.core.ReportWireTest \
             io.integrity.core.IntegrityReportTest \
             io.integrity.core.DetectionEngineTest \

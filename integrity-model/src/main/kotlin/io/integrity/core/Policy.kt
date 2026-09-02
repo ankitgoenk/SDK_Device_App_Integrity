@@ -31,8 +31,35 @@ public class Policy private constructor(
     /** Per-signal kill switch: a bad detector becomes a config change, not an incident. */
     public fun withDisabled(ids: Collection<SignalId>): Policy = copy(disabled = disabled + ids)
 
+    /**
+     * Damps a category's contribution to the combined score. **1.0 is both the maximum and the
+     * default, so this can only ever turn a category down.**
+     *
+     * Stated because the name does not imply it and the clamp is silent:
+     * `withCategoryFactor(EMULATION, 2.0)` yields 1.0 and changes nothing. The clamp is not
+     * arbitrary — [RiskScorer] combines categories with a noisy-OR, and once `factor * score`
+     * exceeds 100 the survival term goes negative and stops being a probability, so
+     * monotonicity is lost and more evidence can produce a lower raw score.
+     *
+     * **To make a signal count for more, weight the signal**, via [withWeight] or the
+     * `proposedWeights` helper its detector module ships. That is the per-signal lever, and it
+     * is the one `docs/RISK_SCORING.md` was describing when it said categories could be
+     * "weighted up" — something this method has never been able to do.
+     */
     public fun withCategoryFactor(category: Category, factor: Double): Policy =
         copy(categoryFactors = categoryFactors + (category to factor.coerceIn(0.0, 1.0)))
+
+    /**
+     * The coverage below which a report is [Verdict.UNKNOWN] rather than scored.
+     *
+     * Public because `strict()` differs from `balanced()` partly by raising it, and a host had
+     * no way to express that itself: the field was reachable only through the private `copy`.
+     */
+    public fun withMinimumCoverage(coverage: Float): Policy =
+        copy(minimumCoverage = coverage.coerceIn(0f, 1f))
+
+    /** Shadow mode as a modifier rather than only as a named policy. See [observability]. */
+    public fun withAdvisoryOnly(advisoryOnly: Boolean): Policy = copy(advisoryOnly = advisoryOnly)
 
     public fun withThresholds(
         lowRisk: Int = lowRiskThreshold,
@@ -67,12 +94,11 @@ public class Policy private constructor(
 
     public companion object {
         /**
-         * Weights for the signals that exist today. Detector families in phases 2-7 add
-         * theirs alongside the detector, per the definition of done in CONTRIBUTING.md.
-         * Anything absent scores as INFORMATIONAL.
-         */
-        /**
          * Deliberately empty.
+         *
+         * Detector families add their weights alongside the detector, through the
+         * `proposedWeights` helper each module ships; anything absent scores as
+         * INFORMATIONAL.
          *
          * A weight configured before its producer exists is a landmine: it does nothing
          * until the detector ships, then activates silently. That has now happened twice —
@@ -105,9 +131,18 @@ public class Policy private constructor(
          * user base that the test matrix did not.
          */
         @JvmStatic
-        public fun observability(): Policy = balanced().copy(advisoryOnly = true)
+        public fun observability(): Policy = balanced().withAdvisoryOnly(true)
 
-        /** Banking, wallets, high-value payments: environment signals matter more. */
+        /**
+         * Banking, wallets, high-value payments: less score is needed before a verdict moves,
+         * and more of the check surface has to have run for the result to count.
+         *
+         * Thresholds and the coverage floor, and nothing else. `docs/RISK_SCORING.md` used to
+         * describe this as promoting `ENV_ACCESSIBILITY_SERVICE` and `ENV_OVERLAY_DETECTED`
+         * and treating `UNKNOWN` as risk — none of which it did, and the first two of which
+         * are signals no detector emits. Compose `proposedWeights` for weights; `UNKNOWN` is
+         * the host's to act on (see the response cookbook), not a policy setting.
+         */
         @JvmStatic
         public fun strict(): Policy = balanced()
             .copy(
@@ -117,10 +152,26 @@ public class Policy private constructor(
                 minimumCoverage = 0.7f
             )
 
-        /** Anti-cheat: memory editors and virtualised containers dominate. */
+        /**
+         * Anti-cheat. **Identical to [balanced] today, and that is the honest state of it.**
+         *
+         * It used to be `balanced().withCategoryFactor(EMULATION, 1.0)
+         * .withCategoryFactor(ENVIRONMENT, 1.0)` — and 1.0 is the default `factorOf` returns,
+         * so for every possible input it scored exactly as `balanced` did. Two mistakes
+         * stacked: the wrong lever (categories damp, they do not amplify — see
+         * [withCategoryFactor]) set to the value that is a no-op.
+         *
+         * What it is documented to do is weight `ENV_MEMORY_EDITOR`, `EMU_*` and `VIRT_*` up.
+         * It cannot: no detector emits any of them (phases 5 and 6), and pre-loading weights
+         * for signals with no producer is the landmine [BASE_WEIGHTS] was emptied to remove —
+         * inert until the detector ships, then live without anyone deciding.
+         *
+         * So this stays a named entry point with no distinguishing behaviour yet, rather than
+         * a policy that quietly does nothing while claiming otherwise. When the EMU/VIRT
+         * detectors land, their weights arrive through `EmulatorDetectors.proposedWeights`
+         * alongside them, and this can compose it.
+         */
         @JvmStatic
         public fun gaming(): Policy = balanced()
-            .withCategoryFactor(Category.EMULATION, 1.0)
-            .withCategoryFactor(Category.ENVIRONMENT, 1.0)
     }
 }
