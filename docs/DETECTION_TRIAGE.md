@@ -1,6 +1,6 @@
 # Detection Triage
 
-[DETECTION_CATALOG.md](DETECTION_CATALOG.md) lists 82 candidate techniques. It is a catalogue of
+[DETECTION_CATALOG.md](DETECTION_CATALOG.md) lists 84 candidate techniques. It is a catalogue of
 what is *conceivable*, and it has been read as a backlog — a list of things someone ought to get
 around to building. That reading is wrong, and expensive: several entries describe checks an
 ordinary Android app is not permitted to make, and at least one, as specified, would fire on a
@@ -12,8 +12,10 @@ value is not "we implemented N detectors". It is:
 > we evaluated every candidate technique, and can show which are observable, which are worth
 > building, and **why the rest are not** — so the same idea is not re-proposed every quarter.
 
-**Status: 73 of 82 triaged.** The nine outstanding are `EMU` and `VIRT`, which cannot be settled
-on the current hardware and are marked as such rather than guessed.
+**Status: 74 of 84 triaged.** Nine of the ten outstanding are `EMU` and `VIRT`, which cannot be
+settled on the current hardware and are marked as such rather than guessed; the tenth is
+`SRV_REPORT_SIGNATURE_INVALID`, which is server-side and out of this file's scope (see the
+standing count).
 
 ## Outcomes
 
@@ -29,7 +31,7 @@ on the current hardware and are marked as such rather than guessed.
 ## Rules
 
 **1. Observability first.** Ask *"can an unprivileged app see this?"* before anything else. It
-eliminates candidates in minutes that would otherwise consume days. Six `ROOT_*` entries died
+eliminates candidates in minutes that would otherwise consume days. Five `ROOT_*` entries died
 at this question.
 
 **2. No detector without a positive control that has been seen to fail.** A control that has
@@ -87,7 +89,7 @@ privileged and its results do not transfer. Recorded **2026-08-31**.
 
 | SignalId | Outcome | Evidence | Stack |
 | --- | --- | --- | --- |
-| `ROOT_SU_BINARY` | **BUILT** — first positive control 2026-09-02 on `M1`, where it fires `CONFIRMED {artefact=su, matches=1}` against `/vendor/bin/su`. Until then it had never fired on any device. | 15 paths probed from an app context. `/system/bin/su` is visible to shell and **`ENOENT` to the app** — KernelSU exposes `su` only in granted namespaces, so this is not hiding, it is how the grant works. Blind here; would fire on Magisk with DenyList off | K1, C1 | K1, C1, **M1** |
+| `ROOT_SU_BINARY` | **BUILT** — first positive control 2026-09-02 on `M1`, where it fires `CONFIRMED {artefact=su, matches=1}` against `/vendor/bin/su`. Until then it had never fired on any device. | 15 paths probed from an app context. `/system/bin/su` is visible to shell and **`ENOENT` to the app** — KernelSU exposes `su` only in granted namespaces, so this is not hiding, it is how the grant works. Blind on `K1`; fires on `M1`, and would fire on Magisk with DenyList off | K1, C1, **M1** |
 | `ROOT_MANAGER_PACKAGE` | **BUILT** | The only positive any detector produced on a rooted device: `LIKELY`, after `com.rifsxd.ksunext` was added to the list **and** the `<queries>` fragment. Defeated by renaming the manager | K1, C1 |
 | `ROOT_DANGEROUS_PROPS` | **BUILT** (reclassified) | Detects a modified *build*, not root. `K1` is genuinely `user`/`release-keys` — nothing spoofed, the check answers a different question than its name implies | K1, C1 |
 | `ROOT_VERIFIED_BOOT` | **BUILD** — and a control now exists. `M1` reports `verifiedbootstate=orange` and `flash.locked=0`, the first device where this reads dirty; the "low value" note below was written when both known devices read `green`. | `ro.boot.*` **is** app-readable. Both devices report `verifiedbootstate=green`, `flash.locked=1` — and on `K1` that is false (see `ROOT_PROP_SPOOF`). Catches careless setups only; reads clean on a hidden root. Ship `INFORMATIONAL` with the blind spot in the row | K1, C1 |
@@ -104,13 +106,16 @@ privileged and its results do not transfer. Recorded **2026-08-31**.
 
 ### What the ROOT branch actually says
 
-Fourteen catalogued techniques. **Six are not observable by an unprivileged app at all** — every
+Fourteen catalogued techniques. **Five are not observable by an unprivileged app at all** — every
 one of them fails on a path that shell can read and an app cannot, which is exactly why they look
-implementable from a terminal. Three are built. Two are deferred for want of a positive control,
-one of which inverts in its obvious form. One is declined.
+implementable from a terminal. Four are built. Two are buildable, two are deferred for want of a
+positive control, one of which inverts in its obvious form. One is declined.
 
-The single technique that fires on a rooted device is a package-name lookup, defeated by
-renaming an application.
+Three techniques fire on a compromised device, and each needed its own rig to prove it:
+`ROOT_MANAGER_PACKAGE` on `K1`, a package-name lookup defeated by renaming an application;
+`ROOT_SU_BINARY` on `M1`, blind on `K1` because KernelSU scopes `su` to granted namespaces; and
+`ROOT_PROP_SPOOF` on `K4`, silent unscoped and silent on `C1`. None of the three fires on all
+three rooted configurations, which is the more useful reading of this table than any count.
 
 ---
 
@@ -158,8 +163,6 @@ key-attestation checker app. Its purpose is to forge Keystore key-attestation ce
 attestation on principle — ADR-0008 puts attestation out of scope, hard rule 9 forbids
 trust-raising inputs. This device shows the scheme would also have been *defeated in practice*.
 Not a detector; evidence for a decision already taken.
-
----
 
 ---
 
@@ -231,8 +234,8 @@ does not restrict.
 
 ## 7. HOOK
 
-Two entries were already settled (`HOOK_SELF_TEXT_MISMATCH` BUILT, `HOOK_PLT_GOT` DUPLICATE —
-see §3). The remaining eighteen:
+Three entries were already settled (`HOOK_SELF_TEXT_MISMATCH` BUILT, `HOOK_MAPS_INCONSISTENT`
+DOCUMENT, `HOOK_PLT_GOT` DUPLICATE — see §3). The remaining eighteen:
 
 | SignalId | Outcome | Evidence | Stack |
 | --- | --- | --- | --- |
@@ -335,16 +338,23 @@ the catalogue row.
 
 Per family, so each column sums to the family's catalogue size and a miscount is visible.
 
-| | ROOT (14) | ENV (16) | HOOK (20) | APP (10) | ATT (6) | META (7) | Total (73) |
+| | ROOT (14) | ENV (16) | HOOK (21) | APP (10) | ATT (6) | META (7) | Total (74) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUILT | 4 | — | 2 | 3 | — | 7 | **16** |
 | BUILD | 2 | 12 | 10 | 6 | — | — | **30** |
 | DEFER | 2 | 1 | — | — | — | — | **3** |
-| DOCUMENT | 5 | 2 | 3 | 1 | 6 | — | **17** |
+| DOCUMENT | 5 | 2 | 4 | 1 | 6 | — | **18** |
 | DUPLICATE | — | — | 2 | — | — | — | **2** |
 | DECLINE | 1 | 1 | 3 | — | — | — | **5** |
 
-**73 of 82 candidates triaged. The census is closed except for `EMU` (5) and `VIRT` (4).**
+**74 of 84 catalogued signals triaged. The census is closed except for `EMU` (5), `VIRT` (4) and
+`SRV_REPORT_SIGNATURE_INVALID`.**
+
+`SRV_REPORT_SIGNATURE_INVALID` is deliberately outside this table: it is produced by
+`sample-backend` while verifying a submission, so no device technique, hardware rig or
+false-positive story applies to it. That exclusion is not self-evident — `ATT_*` and `META_*` are
+also not device techniques and both *are* triaged — so it is stated here rather than left to be
+inferred from an arithmetic gap.
 
 Those nine **cannot be triaged on the current hardware** — neither reference device is an
 emulator or a cloned container, so every verdict would be an assumption, which is the failure
@@ -353,13 +363,16 @@ Space-style clone of `sample-app` is nearly free.
 
 ### What the closed census says
 
-Of 73 candidates, **13 are built** and **34 more are buildable**. But the 34 is a backlog, not
-capability, and the distribution is the point:
+Of 74 candidates, **16 are built** — nine of them device detections, seven `META_*` — and
+**30 more are buildable**. But the 30 is a backlog, not capability, and the distribution is the
+point:
 
-- **ROOT is exhausted at 3.** Six of its fourteen are not observable by an app at all, and no
-  remaining candidate would add a second detection on `K1` — `ROOT_VERIFIED_BOOT` reads `green`
-  there, `ROOT_MOUNT_ANOMALY` inverts, the rest are clean readings.
-- **HOOK's 13 flatters it.** The cheap ones are debugger and environment checks an attacker
+- **ROOT is exhausted at 4.** Five of its fourteen are not observable by an app at all, and no
+  remaining candidate would add a further detection on `K1` itself — `ROOT_VERIFIED_BOOT` reads
+  `green` there, `ROOT_MOUNT_ANOMALY` inverts, the rest are clean readings. The two detections
+  added since this line was first written both came from *new rigs* rather than new techniques:
+  `ROOT_SU_BINARY` needed `M1`, `ROOT_PROP_SPOOF` needed `K4`.
+- **HOOK's 12 flatters it.** The cheap ones are debugger and environment checks an attacker
   disables first; the four with teeth share one bypass — hook the reading path and every one of
   them measures the original bytes.
 - **APP is where the unblocked value is**, and two of its seven wait on

@@ -5,7 +5,7 @@ hostile co-installed apps), plus the backend half that turns its evidence into a
 
 **Status:** phases 0–1 and 7 complete; 2 and 3 in progress. Twelve modules, a shipped native
 core, a backend challenge-and-decision pipeline, and signed reports verified server-side.
-Nine device detections are live against a catalogue of 68 — the other nine `SignalId`s in
+Nine device detections are live against a catalogue of 70 — the other nine `SignalId`s in
 code are `META_*` (the SDK reporting on itself, seven of them), `ATT_*` (server-side vocabulary
 we never emit) and `SRV_REPORT_SIGNATURE_INVALID` (server-side, and we do emit it), so "18
 implemented" from the catalogue gate is not eighteen detections. Run `tools/check-signal-catalog.py` for the
