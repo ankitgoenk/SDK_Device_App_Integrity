@@ -98,6 +98,7 @@ lifecycleScope.launch {
 tools/check-signal-catalog.py                           # every SignalId must be catalogued
 tools/check-doc-drift.py                                # module tables must match settings.gradle.kts
 tools/check-triage-consistency.py                       # the triage must match the catalogue and the code
+tools/check-bridge-vocabulary.py                        # the RN bridge must spell the Kotlin vocabularies
 ```
 
 Two of those invocations look wrong and are not. `detekt ktlintCheck` needs
