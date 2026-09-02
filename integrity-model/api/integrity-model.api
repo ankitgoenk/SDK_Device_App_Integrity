@@ -201,6 +201,11 @@ public final class io/integrity/core/Signal {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class io/integrity/core/SignalCategories {
+	public static final field INSTANCE Lio/integrity/core/SignalCategories;
+	public final fun of-ZzZ-_2s (Ljava/lang/String;)Lio/integrity/core/Category;
+}
+
 public final class io/integrity/core/SignalId {
 	public static final field Companion Lio/integrity/core/SignalId$Companion;
 	public static final synthetic fun box-impl (Ljava/lang/String;)Lio/integrity/core/SignalId;
@@ -234,6 +239,7 @@ public final class io/integrity/core/SignalId$Companion {
 	public final fun getROOT_MANAGER_PACKAGE-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_PROP_SPOOF-isIsmlw ()Ljava/lang/String;
 	public final fun getROOT_SU_BINARY-isIsmlw ()Ljava/lang/String;
+	public final fun getSRV_REPORT_LABEL_UNRECOGNISED-isIsmlw ()Ljava/lang/String;
 	public final fun getSRV_REPORT_SIGNATURE_INVALID-isIsmlw ()Ljava/lang/String;
 }
 

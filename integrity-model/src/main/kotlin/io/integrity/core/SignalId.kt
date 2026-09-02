@@ -124,5 +124,29 @@ public value class SignalId(public val value: String) {
          * otherwise.
          */
         public val SRV_REPORT_SIGNATURE_INVALID: SignalId = SignalId("SRV_REPORT_SIGNATURE_INVALID")
+
+        /**
+         * A submission carried a `category` or `confidence` this build does not recognise.
+         *
+         * Server-side, like [SRV_REPORT_SIGNATURE_INVALID], and raised for the same shape of
+         * reason: something about the *report* is wrong, rather than something about the device.
+         *
+         * **It exists because the alternative was silence.** An unrecognised label used to fall
+         * back to `Category.META` and `Confidence.INCONCLUSIVE` — the two values that carry no
+         * weight — so a one-character change on the wire took a `CONFIRMED` hooking signal out
+         * of the escalation rule that keys on its category, or out of scoring altogether via a
+         * multiplier of 0.0. The fallbacks were chosen to be harmless and were therefore exactly
+         * what a client wanting a signal neutralised would reach for.
+         *
+         * The likelier trigger is not an attacker but **version skew**: a fleet running an SDK
+         * with a `Category` this backend predates would have every signal in it silently
+         * weightless, with nothing anomalous to see anywhere. Now that shows up as a rising
+         * count of one signal.
+         *
+         * `POSSIBLE`, and it can only move a decision toward `COMPROMISED` — ADR-0007's
+         * asymmetry applied at the parse boundary, where unknown input previously failed toward
+         * "nothing found".
+         */
+        public val SRV_REPORT_LABEL_UNRECOGNISED: SignalId = SignalId("SRV_REPORT_LABEL_UNRECOGNISED")
     }
 }
