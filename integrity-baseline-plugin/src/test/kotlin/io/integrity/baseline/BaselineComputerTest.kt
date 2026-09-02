@@ -36,6 +36,7 @@ class BaselineComputerTest {
         "classes2.dex" to dex2,
         "lib/arm64-v8a/libintegrity.so" to "native",
         "res/layout/main.xml" to "irrelevant",
+        "resources.arsc" to "irrelevant",
         "AndroidManifest.xml" to "irrelevant"
     )
 
@@ -49,7 +50,13 @@ class BaselineComputerTest {
         // Resources and the manifest are deliberately absent: APP_RESOURCE_TAMPER is a
         // separate signal with a separate list, and folding them in here would make one
         // digest answer two questions.
-        assertThat(baseline.dex.keys + baseline.nativeLibs.keys).doesNotContain("AndroidManifest.xml")
+        //
+        // Named rather than implied, because DETECTION_TRIAGE.md asserted the opposite —
+        // "integrity-baseline-plugin already digests resources.arsc and the res/ tree" — and
+        // moved APP_RESOURCE_TAMPER to BUILD on the strength of it. `containsExactly` above
+        // already pins this; this line is here so the sentence is falsifiable at a glance.
+        assertThat(baseline.dex.keys + baseline.nativeLibs.keys)
+            .containsNoneOf("AndroidManifest.xml", "resources.arsc", "res/layout/main.xml")
     }
 
     @Test
