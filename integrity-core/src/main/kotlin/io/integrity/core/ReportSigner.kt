@@ -33,6 +33,14 @@ public interface ReportSigner {
      *
      * The host enrols this over its own authenticated channel; this SDK originates no network
      * traffic (ADR-0003) and so cannot enrol anything itself.
+     *
+     * **Note the asymmetry with [sign], and where it is contained.** [sign] returns null when it
+     * cannot produce a signature; this property has no such channel, so an implementation that
+     * cannot produce a key id has nothing to do but throw. [SignedReports.seal] therefore catches
+     * around *both*, which is what makes the contract hold for implementations this module will
+     * never see. Widening this to `String?` would express the failure instead of containing it —
+     * a source-breaking change to a public SPI, worth taking while there is no public release,
+     * and deliberately not bundled with the containment fix.
      */
     public val keyId: String
 
@@ -50,24 +58,50 @@ public interface ReportSigner {
 public object SignedReports {
 
     /**
-     * Returns the envelope, or null when [signer] could not sign.
+     * Returns the envelope, or null when [signer] could not produce one. Never throws.
      *
      * Null is returned rather than an unsigned envelope. An envelope with an empty signature
      * would present a `keyId` it cannot substantiate, which is precisely the shape the
      * backend raises `SRV_REPORT_SIGNATURE_INVALID` for — so a signing failure on an honest
      * device would manufacture evidence against it. A host that cannot sign should send the
      * canonical report unsigned, which the backend accepts without accusation.
+     *
+     * ### Why the whole body is wrapped, and not just the signing call
+     *
+     * That reasoning had a hole. The guard used to sit on `signer.sign(...)`, and the *first*
+     * statement was `signer.keyId` — which in [KeystoreReportSigner] is the property that
+     * generates the key. Every ordinary Keystore failure surfaces there rather than in `sign`:
+     * `generateKeyPair` throwing `ProviderException` on a wedged keymaster, a missing provider,
+     * a null certificate for an alias that exists. Those propagated out of an SDK embedded in
+     * someone else's app, which hard rule 5 forbids and `IntegrityGuard` calls "worse than no
+     * integrity SDK".
+     *
+     * The consequence was the one this doc set out to prevent, reached by another route: no
+     * envelope, so no report, and `SERVER_VERIFICATION.md` reads "no report at all" as
+     * `COMPROMISED` for high-value actions. A keystore hiccup on an honest phone ended at an
+     * accusation.
+     *
+     * Wrapping here rather than inside [KeystoreReportSigner] is deliberate: it holds for any
+     * [ReportSigner], including ones this module will never see, and the SPI gives an
+     * implementation no way to decline a `keyId` other than throwing.
      */
-    public fun seal(report: IntegrityReport, packageName: String, signer: ReportSigner): String? {
-        val header = SignedReport.Header(
-            keyId = signer.keyId,
-            packageName = packageName,
-            sdkVersion = report.sdkVersion
-        )
-        val input = SignedReport.signingInput(header, ReportWire.canonicalJson(report))
-        val signature = signer.sign(input.bytes) ?: return null
-        return SignedReport.seal(input, signature)
-    }
+    public fun seal(report: IntegrityReport, packageName: String, signer: ReportSigner): String? =
+        runCatching {
+            val header = SignedReport.Header(
+                keyId = signer.keyId,
+                packageName = packageName,
+                sdkVersion = report.sdkVersion
+            )
+            val input = SignedReport.signingInput(header, ReportWire.canonicalJson(report))
+            // `takeIf { it.isNotEmpty() }`, because an empty ByteArray is not null and this
+            // doc's whole point is that an envelope with an empty signature must not exist:
+            // it presents a `keyId` it cannot substantiate. Sealing one produced an envelope
+            // `SignedReport.parse` rejects, which is a malformed submission rather than the
+            // unsigned one a host that cannot sign should be sending.
+            val signature = signer.sign(input.bytes)?.takeIf { it.isNotEmpty() }
+                ?: return@runCatching null
+            SignedReport.seal(input, signature)
+        }.getOrNull()
 }
 
 /**
@@ -90,7 +124,12 @@ public object SignedReports {
  */
 public class KeystoreReportSigner(private val alias: String = DEFAULT_ALIAS) : ReportSigner {
 
-    private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+    // Lazy, so constructing a signer cannot throw. `KeyStore.load` declares IOException,
+    // NoSuchAlgorithmException and CertificateException, and a constructor that throws is a
+    // failure a host cannot contain by checking the result.
+    private val keyStore: KeyStore by lazy {
+        KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+    }
 
     override val keyId: String
         get() = keyIdOf(publicKey())
@@ -103,6 +142,11 @@ public class KeystoreReportSigner(private val alias: String = DEFAULT_ALIAS) : R
      * must find the right key to check has to be told which one. It stays in the envelope
      * header and never enters signal evidence, so hard rule 3's boundary — no device
      * identity inside the evidence — holds. See ADR-0011's consequences.
+     *
+     * **Throws if the Keystore cannot produce a key**, and is not contained the way
+     * [SignedReports.seal] is. That is the right shape here: enrolment is a host-driven step
+     * with a user present, where a failure is worth surfacing and retrying rather than
+     * silently skipping. Detection and signing are the paths that must never throw.
      */
     public fun publicKeyEncoded(): ByteArray = publicKey().encoded
 
@@ -114,12 +158,21 @@ public class KeystoreReportSigner(private val alias: String = DEFAULT_ALIAS) : R
         }
     }.getOrNull()
 
-    private fun publicKey(): PublicKey = ensureKey().let {
-        keyStore.getCertificate(alias).publicKey
+    // `ensureKey()` returns Unit, so the `.let` these two used to be written with was
+    // decoration that hid a second statement running after it.
+    private fun publicKey(): PublicKey {
+        ensureKey()
+        // getCertificate returns null for an alias that holds no certificate — reachable if
+        // the entry was created or removed by something else. Dereferencing it was an NPE.
+        val certificate = keyStore.getCertificate(alias)
+            ?: error("Keystore alias '$alias' holds no certificate after key generation")
+        return certificate.publicKey
     }
 
-    private fun privateKey(): PrivateKey = ensureKey().let {
-        keyStore.getKey(alias, null) as PrivateKey
+    private fun privateKey(): PrivateKey {
+        ensureKey()
+        return keyStore.getKey(alias, null) as? PrivateKey
+            ?: error("Keystore alias '$alias' holds no private key after key generation")
     }
 
     private fun ensureKey() {

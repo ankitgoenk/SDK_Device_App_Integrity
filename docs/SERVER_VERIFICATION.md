@@ -102,7 +102,13 @@ addresses forgery, not silence.
 #### Where each half is covered
 
 `KeystoreReportSigner` has **no unit tests and can have none** — `AndroidKeyStore` is a device
-provider. `KeystoreReportSignerInstrumentedTest` covers it on-device instead, and verifies
+provider. That is true of the *signer*, and it got extended without anyone noticing to the thing
+sitting on top of it: `SignedReports.seal` takes the `ReportSigner` **interface**, so every way a
+signer can fail is reachable from a fake in three lines, on any JVM. `SignedReportsTest` does
+that, and the case that mattered — a signer that cannot produce a `keyId` — is the one `seal`
+used to let through, because it read `keyId` on the line before the guard.
+
+`KeystoreReportSignerInstrumentedTest` covers the signer on-device, and verifies
 signatures with plain JCE rather than through `ReportVerifier`, so an independent oracle
 cannot agree with the signer by sharing its bug. It asserts the property the scheme rests on
 directly: the private key's `getEncoded()` returns null.
