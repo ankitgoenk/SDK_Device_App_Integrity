@@ -166,7 +166,7 @@ technique column and no false-positive story that a device could cause.
 3. Implement in the owning detector module; native where a JVM implementation is trivially
    hookable.
 4. Unit test the parsing logic against captured fixtures (real `/proc` dumps in
-   `integrity-testing`).
+   `integrity-testing/fixtures/`, which is empty — see its `README.md`).
 5. Instrumented test: at least one positive device/condition and one clean device.
 6. FP analysis: name at least one legitimate configuration that could trigger it, and state
    why the weight is safe (or add an allowlist).
