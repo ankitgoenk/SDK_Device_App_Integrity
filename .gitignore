@@ -26,3 +26,7 @@ signing.properties
 
 # Kotlin compiler daemon session files
 .kotlin/
+
+# Python bytecode from the tools/ gates
+__pycache__/
+*.pyc
