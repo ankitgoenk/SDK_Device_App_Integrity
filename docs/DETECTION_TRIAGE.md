@@ -223,12 +223,12 @@ the platform is generally willing — the interesting failures are elsewhere.
 | `APP_UNEXPECTED_DEX` | **BUILD** | Hidden-API reflection into `dalvik.system.BaseDexClassLoader.pathList` **still works** on API 33 and 36 — `dexElements=1` on both. That was the open question | K1, C1 |
 | `APP_PROCESS_NAME_ANOMALY` | **BUILD** | `/proc/self/cmdline` readable; matches the package on both | K1, C1 |
 | `APP_DEX_DIGEST_MISMATCH` | **BUILT** | Shipped 2026-09-01. The block was `integrity-baseline-plugin`, which now computes the build-time baseline; both ends share one `DexAggregate` construction in `integrity-model`, because the first cut had the plugin emitting per-entry digests while the client computed an aggregate — two halves that would have compiled, tested green on both sides, and never agreed about a single APK. Declines on split installs rather than accusing: this id escalates decisively, so a Play Feature Delivery false positive would call the host's own app fake | K1, C1 |
-| `APP_RESOURCE_TAMPER` | **BUILD** (unblocked 2026-09-01) | Same shape as `APP_DEX_DIGEST_MISMATCH` and it shared the same baseline dependency, which is now satisfied — `integrity-baseline-plugin` already digests `resources.arsc` and the `res/` tree alongside dex. The remaining work is the client half and a decision on how much of `res/` to cover: overlays and per-density splits move resources around legitimately, so the split-install caution that applies to dex applies here at least as hard | — |
+| `APP_RESOURCE_TAMPER` | **DEFER** (was **BUILD**; the dependency it was unblocked on does not exist) | This row said `integrity-baseline-plugin` "already digests `resources.arsc` and the `res/` tree alongside dex". It does not: `BaselineComputer.bucketFor` sorts entries into exactly two buckets — `classes*.dex` and `lib/**.so` — and discards everything else, `Baseline` has no third map, and `toJson()` emits no resources field. `PLAN.md` states the same two buckets correctly ("9 dex, 7 native libraries"). **What actually blocks this is not hardware but two pieces of our own code**, and they must land in this order: (1) the resource subset has to be decided *once* and encoded in `integrity-model` as a `ResourceAggregate` beside `DexAggregate`, because the build and the device must compute it identically or the comparison is meaningless — the drift `DexAggregate` exists to prevent, and which already bit dex once; (2) the bucket and the `resources` map have to be added to the plugin. Only then is the client half unblocked. Note (2) also widens the entry-name space the baseline writer escapes, so it depends on that fix. The open judgement — how much of `res/` to cover, given that overlays and per-density splits relocate resources legitimately — belongs to step 1, not to the client | — |
 | `APP_TASK_HIJACK_RISK` | **DOCUMENT** (host posture, not a detector) | `taskAffinity` reads back fine — but it describes **the host's own manifest**, not the device. It cannot distinguish a compromised device from a badly configured app, and the fix is the host's to make. This is lint for integrators, like `ENV_OVERLAY_DETECTED` | K1, C1 |
 
-Seven of ten are buildable and two of those wait only on a plugin. APP is the healthiest branch
-in the catalogue — unsurprising, since asking a process about itself is the one thing Android
-does not restrict.
+Eight of ten are built or buildable, and the ninth — `APP_RESOURCE_TAMPER` — waits on our own
+code rather than on the platform. APP is the healthiest branch in the catalogue, unsurprising
+since asking a process about itself is the one thing Android does not restrict.
 
 ---
 
@@ -341,8 +341,8 @@ Per family, so each column sums to the family's catalogue size and a miscount is
 | | ROOT (14) | ENV (16) | HOOK (21) | APP (10) | ATT (6) | META (7) | Total (74) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | BUILT | 4 | — | 2 | 3 | — | 7 | **16** |
-| BUILD | 2 | 12 | 10 | 6 | — | — | **30** |
-| DEFER | 2 | 1 | — | — | — | — | **3** |
+| BUILD | 2 | 12 | 10 | 5 | — | — | **29** |
+| DEFER | 2 | 1 | — | 1 | — | — | **4** |
 | DOCUMENT | 5 | 2 | 4 | 1 | 6 | — | **18** |
 | DUPLICATE | — | — | 2 | — | — | — | **2** |
 | DECLINE | 1 | 1 | 3 | — | — | — | **5** |
@@ -364,7 +364,7 @@ Space-style clone of `sample-app` is nearly free.
 ### What the closed census says
 
 Of 74 candidates, **16 are built** — nine of them device detections, seven `META_*` — and
-**30 more are buildable**. But the 30 is a backlog, not capability, and the distribution is the
+**29 more are buildable**. But the 29 is a backlog, not capability, and the distribution is the
 point:
 
 - **ROOT is exhausted at 4.** Five of its fourteen are not observable by an app at all, and no
@@ -375,11 +375,13 @@ point:
 - **HOOK's 12 flatters it.** The cheap ones are debugger and environment checks an attacker
   disables first; the four with teeth share one bypass — hook the reading path and every one of
   them measures the original bytes.
-- **APP is where the unblocked value is**, and two of its seven wait on
-  `integrity-baseline-plugin` rather than on any platform limit. That plugin unblocks
-  `APP_DEX_DIGEST_MISMATCH` and `APP_RESOURCE_TAMPER` together, and gives the SDK the one thing
-  it currently cannot do: notice that *the app itself* changed — which, unlike everything in
-  ROOT, a rooted device does not automatically defeat.
+- **APP is where the unblocked value is.** `APP_DEX_DIGEST_MISMATCH` has since shipped, and it
+  gives the SDK the one thing it otherwise cannot do: notice that *the app itself* changed —
+  which, unlike everything in ROOT, a rooted device does not automatically defeat.
+  `APP_RESOURCE_TAMPER` was recorded here as unblocked by the same plugin and is not: the
+  plugin digests dex and native libraries only. It waits on two pieces of our own code rather
+  than on any platform limit, which makes it cheaper than anything on the procurement list and
+  more expensive than this bullet used to imply.
 
 ### Blocked on hardware, not on effort — the procurement list
 
