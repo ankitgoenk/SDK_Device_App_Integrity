@@ -20,6 +20,7 @@ STORE = f"{BACKEND}/InMemoryChallengeStore.kt"
 SERVICE = f"{BACKEND}/VerificationService.kt"
 POLICY = f"{BACKEND}/DecisionPolicy.kt"
 SIGNATURE = f"{BACKEND}/SignatureVerification.kt"
+REPORTS = f"{BACKEND}/SubmittedReports.kt"
 TEST_CMD = os.environ.get("TEST_CMD", "./gradlew :sample-backend:test")
 
 # (source file, description, exact text to replace, replacement)
@@ -77,6 +78,20 @@ MUTANTS = [
     (SIGNATURE, "an absent signature is treated as a failed one",
      "if (envelope == null) return SignatureCheck.Unsigned",
      "if (envelope == null) return SignatureCheck.Invalid(InvalidReason.MALFORMED_ENVELOPE, null)"),
+    # --- wire labels: the two values that carry no weight were the fallbacks ---
+    (REPORTS, "the signal category is taken from the wire instead of the id",
+     "val derived = SignalCategories.of(signal.id)",
+     "val derived: Category? = null"),
+    (REPORTS, "a category disagreeing with the id is silently corrected",
+     "if (derived != null && declared != derived) unrecognisedLabels++",
+     "if (false) unrecognisedLabels++"),
+    (REPORTS, "an unreadable confidence is absorbed rather than reported",
+     "?: Confidence.INCONCLUSIVE.also { unrecognisedLabels++ }",
+     "?: Confidence.INCONCLUSIVE"),
+    (REPORTS, "the label signal replaces the evidence instead of joining it",
+     "signals = signals + labelSignal,",
+     "signals = labelSignal.ifEmpty { signals },"),
+
     (SIGNATURE, "enrolment accepts a caller-supplied key id instead of deriving one",
      "KeyIds.of(encodedPublicKey).also { keys[it] = key }",
      '"caller-chosen-id".also { keys[it] = key }'),
