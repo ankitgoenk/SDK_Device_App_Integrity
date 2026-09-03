@@ -1,6 +1,7 @@
 package io.integrity.core
 
 import com.google.common.truth.Truth.assertThat
+import java.security.ProviderException
 import org.junit.Test
 
 /**
@@ -29,11 +30,13 @@ class SignedReportsTest {
             private set
 
         override val keyId: String
-            get() = if (throwFromKeyId) throw IllegalStateException("keystore unavailable") else id
+            // ProviderException rather than something generic: it is what a wedged keymaster
+            // actually throws out of `generateKeyPair`, which is the failure this covers.
+            get() = if (throwFromKeyId) throw ProviderException("failed to generate key pair") else id
 
         override fun sign(signingInput: ByteArray): ByteArray? {
             signCalled = true
-            if (throwFromSign) throw IllegalStateException("keymaster refused")
+            if (throwFromSign) throw ProviderException("keymaster refused")
             return signature
         }
     }

@@ -55,8 +55,7 @@ public class Policy private constructor(
      * Public because `strict()` differs from `balanced()` partly by raising it, and a host had
      * no way to express that itself: the field was reachable only through the private `copy`.
      */
-    public fun withMinimumCoverage(coverage: Float): Policy =
-        copy(minimumCoverage = coverage.coerceIn(0f, 1f))
+    public fun withMinimumCoverage(coverage: Float): Policy = copy(minimumCoverage = coverage.coerceIn(0f, 1f))
 
     /** Shadow mode as a modifier rather than only as a named policy. See [observability]. */
     public fun withAdvisoryOnly(advisoryOnly: Boolean): Policy = copy(advisoryOnly = advisoryOnly)

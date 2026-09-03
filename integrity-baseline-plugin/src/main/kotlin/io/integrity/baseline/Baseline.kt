@@ -38,8 +38,9 @@ public data class Baseline(
      * between quote characters, so an entry name containing `"` or `\` produced a document no
      * parser accepts. Three of the four interpolated values are hex from `MessageDigest` and
      * could not; the fourth is a zip entry name, which the format constrains only at its ends
-     * (`classes*.dex`, `lib/**.so`) and not in between. It does not fire on an ordinary build,
-     * and the failure if it ever did would be silent and late: nothing here parses its own
+     * (`classes*.dex`, or under `lib/` ending in `.so`) and not in between. It does not fire
+     * on an ordinary build, and the failure if it ever did would be silent and late:
+     * nothing here parses its own
      * output, so the task logs success, the artifact publishes, and the break surfaces at the
      * backend on a release that has already shipped. `IntegrityBaselineTask` already refuses
      * to write a *vacuous* baseline — "a file that looks like a comparison and can never
