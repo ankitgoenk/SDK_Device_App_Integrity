@@ -269,6 +269,56 @@ Nothing is spoofed on this device: root is kernel-side, so no property rewriting
 An app-visible cross-check is still the right redesign — it just cannot be falsified until a
 Magisk + Play Integrity Fork configuration exists to fail it.
 
+### The cloak is now standing, and iMobile still sees through it, measured 2026-09-03
+
+Same Pixel 10a, against `main` @ `b34853a`. Two changes since the 2026-09-01 cloaking run make
+this worth re-recording: HMA's "Hide Root" scope is now a **standing** part of the rig, and a
+shipping bank app is installed to compare against.
+
+HMA-OSS keeps its scope at `/data/misc/hide_my_applist_*/config.json`. It currently aims the
+`Hide Root` template (appList includes `com.rifsxd.ksunext`) at **19** apps, among them
+`io.integrity.sample` and `com.csam.icici.bank.imobile`. So the baseline table at the top of
+§9 — "Pixel → `ROOT_MANAGER_PACKAGE` LIKELY" — **no longer describes the default rig**: with the
+sample now permanently in scope, a plain run reports `INCONCLUSIVE` + `META_VISIBILITY_RESTRICTED`,
+every other root detector silent. This is the `K1`-plus-standing-cloak state; call it what it is
+when quoting a run.
+
+**The cloak is per-app and exact-match, proven without touching the rig.** Rather than aim/un-aim
+HMA (which mutates shared config used by real banking apps on this device), the same APK was built
+under a second `applicationId` via a debug `applicationIdSuffix = ".probe"` — `io.integrity.sample.probe`
+is not in HMA's scope list. Same code, same device, same boot:
+
+| Package | In HMA scope | `ROOT_MANAGER_PACKAGE` | Execution coverage |
+| --- | --- | --- | --- |
+| `io.integrity.sample` | yes | **INCONCLUSIVE** + `META_VISIBILITY_RESTRICTED` | 70% |
+| `io.integrity.sample.probe` | no | **LIKELY**, `count=1`, digest `e8983e1e42ddde31` (= `com.rifsxd.ksunext`) | 80% |
+
+`dumpsys package queries` grants **both** packages visibility of `com.rifsxd.ksunext` — the
+platform is not the gatekeeper here. The difference is entirely the in-process `getPackageInfo`
+hook, which keys on the exact package name. This is a cleaner control than the 2026-09-01 aim/un-aim
+table because it changes nothing in the adversary's configuration. The suffix edit was reverted
+and the probe variant uninstalled; it exists only in this measurement.
+
+**iMobile detects root anyway, so its detection is native.** `com.csam.icici.bank.imobile` (ICICI
+Bank iMobile Pay, DexGuard-obfuscated, `libpairipcore.so` + obfuscated RASP libs) is simultaneously
+(a) in HMA's `Hide Root` scope, so `ksunext` is hidden from it exactly as from us, and (b) in
+`/data/adb/tricky_store/target.txt`, so its Play Integrity is spoofed — measured passing
+`MEETS_STRONG_INTEGRITY` for the checker app in the 2026-09-01 run above. Launched under both
+mitigations, it still shows a full-screen **"Rooting Detected! …we have stopped the Mobile Banking
+Services on rooted devices"** and blocks. By elimination its signal is neither package visibility
+(hidden) nor attestation (spoofed) but **local/native**: its libs reference the process SELinux
+context (`libokszvydn.so`: "Process SELinux context unreadable") and `/proc/self/{maps,status,fd}`
+(`libSecureComponent.so`), surfaces HMA's `system_server`-side package filter never touches. This
+is the same address-space-vs-`PackageManager` distinction the ReZygisk and HMA rows above reach
+from our own side — restated here as an external app clearing the bar we currently cannot.
+
+The lesson for our roadmap is not a new detector to copy but a reach gap: every signal we have
+that bears on this device routes through `PackageManager` (cloakable in-process) or reads
+properties (kernel-side root leaves stock). The phase-3 native reads that do **not** —
+`/proc/self/maps`, process SELinux context — are the ones with a live positive control here, and
+the ones `ROOT_VERIFIED_BOOT` / `ROOT_SELINUX_PERMISSIVE` are not, since tricky_store/susfs keep
+those stock (see the property-spoof rows above).
+
 ### The hook family gets a positive control, measured 2026-09-01
 
 `K2` = `K1` plus **Vector v2.2**, an Xposed framework resident in hooked processes. LSPosed

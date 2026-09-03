@@ -1,5 +1,5 @@
 public final class io/integrity/detector/environment/EnvironmentDetectors {
 	public static final field INSTANCE Lio/integrity/detector/environment/EnvironmentDetectors;
-	public static final fun all ()Ljava/util/List;
+	public final fun all ()Ljava/util/List;
 }
 
