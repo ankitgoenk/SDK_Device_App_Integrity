@@ -84,23 +84,22 @@ public object SignedReports {
      * [ReportSigner], including ones this module will never see, and the SPI gives an
      * implementation no way to decline a `keyId` other than throwing.
      */
-    public fun seal(report: IntegrityReport, packageName: String, signer: ReportSigner): String? =
-        runCatching {
-            val header = SignedReport.Header(
-                keyId = signer.keyId,
-                packageName = packageName,
-                sdkVersion = report.sdkVersion
-            )
-            val input = SignedReport.signingInput(header, ReportWire.canonicalJson(report))
-            // `takeIf { it.isNotEmpty() }`, because an empty ByteArray is not null and this
-            // doc's whole point is that an envelope with an empty signature must not exist:
-            // it presents a `keyId` it cannot substantiate. Sealing one produced an envelope
-            // `SignedReport.parse` rejects, which is a malformed submission rather than the
-            // unsigned one a host that cannot sign should be sending.
-            val signature = signer.sign(input.bytes)?.takeIf { it.isNotEmpty() }
-                ?: return@runCatching null
-            SignedReport.seal(input, signature)
-        }.getOrNull()
+    public fun seal(report: IntegrityReport, packageName: String, signer: ReportSigner): String? = runCatching {
+        val header = SignedReport.Header(
+            keyId = signer.keyId,
+            packageName = packageName,
+            sdkVersion = report.sdkVersion
+        )
+        val input = SignedReport.signingInput(header, ReportWire.canonicalJson(report))
+        // `takeIf { it.isNotEmpty() }`, because an empty ByteArray is not null and this
+        // doc's whole point is that an envelope with an empty signature must not exist:
+        // it presents a `keyId` it cannot substantiate. Sealing one produced an envelope
+        // `SignedReport.parse` rejects, which is a malformed submission rather than the
+        // unsigned one a host that cannot sign should be sending.
+        val signature = signer.sign(input.bytes)?.takeIf { it.isNotEmpty() }
+            ?: return@runCatching null
+        SignedReport.seal(input, signature)
+    }.getOrNull()
 }
 
 /**
