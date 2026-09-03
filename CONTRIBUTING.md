@@ -2,10 +2,12 @@
 
 ## Branching and commits
 
-- Feature work happens on `claude/android-security-detection-sdk-f3c8uh` (current development
-  branch) or a topic branch off it.
+- Feature work happens on a topic branch off `main`, merged by pull request. Prefixes in use:
+  `feat/`, `fix/`, `docs/`, `ci/`, `chore/` — e.g. `feat/hook-unexpected-module`.
 - Conventional commits: `feat(detector-root): add KernelSU artefact probe`.
 - One signal family per PR wherever possible.
+- Delete the branch once its PR is merged. `main` accumulated a dozen merged-and-kept
+  branches, which is why `git branch -r` is no guide to what is actually in flight.
 
 ## Definition of done for a detector
 
