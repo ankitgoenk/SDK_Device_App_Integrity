@@ -85,6 +85,21 @@ public value class SignalId(public val value: String) {
         /** `android.os.Build` disagrees with the system property that backs it. */
         public val ROOT_PROP_SPOOF: SignalId = SignalId("ROOT_PROP_SPOOF")
 
+        // --- ENVIRONMENT (phase 5) ---------------------------------------------------
+
+        /**
+         * No PIN, pattern or password is set on the device.
+         *
+         * **Named for the absence, because only the absence is evidence.** A secured device
+         * emits nothing: a signal that appeared when the lock screen *was* present would be
+         * something in a report raising trust, which hard rule 9 forbids. The vocabulary makes
+         * that direction unwriteable rather than merely discouraged.
+         *
+         * Covers biometrics implicitly — Android will not enrol a face or fingerprint without
+         * a PIN, pattern or password behind it, so this is false whenever one exists.
+         */
+        public val ENV_NO_DEVICE_LOCK: SignalId = SignalId("ENV_NO_DEVICE_LOCK")
+
         // --- Referenced by the scorer's escalation rules ahead of their detectors ------
         // These are decisive on their own, so the scoring model names them directly.
         // Their detectors arrive in phases 4 and 7.
