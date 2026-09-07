@@ -174,6 +174,7 @@ from a file read, and shell is more privileged besides.
 
 | SignalId | Outcome | Evidence | Stack |
 | --- | --- | --- | --- |
+| `ENV_NO_DEVICE_LOCK` | **BUILT** — phase 5's first detector | `KeyguardManager.isDeviceSecure()` reads without permission from API 23; `minSdk` is 24. **The control is inverted from every other row here, and that is the useful part:** a stock AVD ships with no lock screen, so the *positive* case is free on every CI runner and the *clean* case is the one needing a configured device. Rule 2 asks for a control that has been seen to fail; this one fails by default. A second signal for biometrics was considered and rejected rather than deferred: Android will not enrol a face or fingerprint without a PIN/pattern/password backup, so `isDeviceSecure()` is already true whenever one exists, and a biometric row would fire on every secure PIN-only device while adding nothing to the question being asked | AVD, C1 |
 | `ENV_ADB_ENABLED` | **BUILD** | `Settings.Global.ADB_ENABLED` and `DEVELOPMENT_SETTINGS_ENABLED` read without permission; both return `1` on both devices. Note both are developer devices — this discriminates nothing here, and its false-positive population is *every developer* | K1, C1 |
 | `ENV_ADB_OVER_NETWORK` | **BUILD** | `android.os.SystemProperties.get` **is reachable by reflection** on API 33 and API 36 — returned empty (property unset), not denied. Control constructible by enabling wireless debugging | K1, C1 |
 | `ENV_USER_CA_INSTALLED` | **BUILD** | `KeyStore("AndroidCAStore")` enumerates: 143 aliases on `K1`, 129 on `C1`, `user:` count **0** on both. Correct negative; control constructible by installing a user CA | K1, C1 |
@@ -189,7 +190,7 @@ from a file read, and shell is more privileged besides.
 
 ### What the ENV branch says
 
-Sixteen entries. Eight are straightforwardly buildable and cheap — a better hit-rate than ROOT,
+Seventeen entries, one of them now built. Eight more are straightforwardly buildable and cheap — a better hit-rate than ROOT,
 because these are *environment* facts the platform is willing to tell an app about rather than
 privileged state it actively hides.
 
@@ -338,16 +339,16 @@ the catalogue row.
 
 Per family, so each column sums to the family's catalogue size and a miscount is visible.
 
-| | ROOT (14) | ENV (16) | HOOK (21) | APP (10) | ATT (6) | META (7) | Total (74) |
+| | ROOT (14) | ENV (17) | HOOK (21) | APP (10) | ATT (6) | META (7) | Total (75) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BUILT | 4 | — | 2 | 3 | — | 7 | **16** |
+| BUILT | 4 | 1 | 2 | 3 | — | 7 | **17** |
 | BUILD | 2 | 12 | 10 | 5 | — | — | **29** |
 | DEFER | 2 | 1 | — | 1 | — | — | **4** |
 | DOCUMENT | 5 | 2 | 4 | 1 | 6 | — | **18** |
 | DUPLICATE | — | — | 2 | — | — | — | **2** |
 | DECLINE | 1 | 1 | 3 | — | — | — | **5** |
 
-**74 of 84 catalogued signals triaged. The census is closed except for `EMU` (5), `VIRT` (4) and
+**75 of 86 catalogued signals triaged. The census is closed except for `EMU` (5), `VIRT` (4) and
 `SRV_REPORT_SIGNATURE_INVALID`.**
 
 `SRV_REPORT_SIGNATURE_INVALID` is deliberately outside this table: it is produced by
@@ -363,7 +364,7 @@ Space-style clone of `sample-app` is nearly free.
 
 ### What the closed census says
 
-Of 74 candidates, **16 are built** — nine of them device detections, seven `META_*` — and
+Of 75 candidates, **17 are built** — ten of them device detections, seven `META_*` — and
 **29 more are buildable**. But the 29 is a backlog, not capability, and the distribution is the
 point:
 

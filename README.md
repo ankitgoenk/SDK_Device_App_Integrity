@@ -13,12 +13,12 @@ A modular, Kotlin-first Android SDK that answers two questions for the host app 
 The SDK produces an **evidence-based report**, not a boolean. The host app — and ideally the
 host's **backend** — decides what to do with it.
 
-> **Status:** phases 0, 1 and 7 are closed; phases 2 and 3 are in progress. The engine,
+> **Status:** phases 0, 1 and 7 are closed; phases 2, 3, 4 and 5 are in progress. The engine,
 > scoring, policy and cache are implemented; the native core ships; the backend issues
 > challenges, verifies signed reports and grades evidence.
 >
-> **Nine device detections are live** — four root families, three app-tamper, two hooking —
-> out of a catalogue of 70, and **every one of them ships at `INFORMATIONAL`
+> **Ten device detections are live** — four root families, three app-tamper, two hooking and
+> one environment — out of a catalogue of 71, and **every one of them ships at `INFORMATIONAL`
 > weight** per hard rule 6, so a default-policy deployment still scores them at zero. Do not
 > read "implemented" as "enforcing". Start with [`docs/PLAN.md`](docs/PLAN.md).
 

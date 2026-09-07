@@ -230,7 +230,25 @@ world-writable paths, debuggable flag.
 > - Signing-cert pins and the native string vault remain in the extension as configuration the
 >   task does not yet consume.
 
-### Phase 5 — Hostile-app & environment detection *(1 week)*
+### Phase 5 — Hostile-app & environment detection *(1 week)* — **IN PROGRESS**
+
+> **Status.** Opened by `ENV_NO_DEVICE_LOCK` — `KeyguardManager.isDeviceSecure()`, no
+> permission, `CONFIRMED` on absence and **silent on presence**, because a signal emitted when
+> the device *was* locked would be a report raising trust (hard rule 9). Its positive control is
+> inverted from the rest of the catalogue and free: a stock AVD ships with no lock screen, so
+> the failing case is the default on every CI runner and the *clean* case is the one needing a
+> configured device.
+>
+> A companion biometric signal was considered and **rejected rather than deferred**: Android
+> will not enrol a face or fingerprint without a PIN, pattern or password behind it, so
+> `isDeviceSecure()` is already true whenever one exists. It would have fired on every secure
+> PIN-only device while adding nothing to the question. Face cannot be isolated in any case —
+> `BiometricManager` reports a security class, not a modality.
+>
+> Note what this family costs that ROOT does not: its false-positive population is *people*
+> rather than misconfigured devices. Shared tablets, kiosks, and users who declined a lock
+> screen are all legitimate, which is why this ships `INFORMATIONAL` and why
+> `docs/RISK_SCORING.md`'s "never enforce on a single high-FP signal" applies here first.
 Signals `ENV_*`. Scoped, allow-listed `<queries>` probes for patchers (Lucky Patcher),
 memory editors (GameGuardian), MITM proxies (HttpCanary et al.), cloners/virtual spaces,
 Xposed/Magisk managers, and `frida-server` drops in `/data/local/tmp`. Plus ADB/developer
