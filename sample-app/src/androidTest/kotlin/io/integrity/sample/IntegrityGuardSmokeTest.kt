@@ -68,7 +68,16 @@ class IntegrityGuardSmokeTest {
     fun everySignalBelongsToARegisteredCategory() = runBlocking {
         val report = IntegrityGuard.evaluate(Depth.FULL, force = true)
 
-        val registered = setOf(Category.ROOT, Category.APP_TAMPER, Category.META)
+        // Derived from what the app registers, not a hand-kept list. The literal
+        // `setOf(ROOT, APP_TAMPER, META)` this replaced was really "categories observed so
+        // far": it broke the first time a new family started emitting, and HOOKING was the
+        // same break waiting for a device with an unexpected module mapped into it.
+        val registered = SampleApplication.detectors().map { it.category }.toSet() +
+            // The engine's own timeout/error signals, which belong to no detector.
+            Category.META +
+            // NativeIntegrityDetector declares META and emits APP_NATIVE_LIB_MISMATCH as
+            // APP_TAMPER, so its category is not derivable from the detector alone.
+            Category.APP_TAMPER
         report.signals.forEach { signal ->
             assertTrue("unexpected category ${signal.category}", signal.category in registered)
         }
