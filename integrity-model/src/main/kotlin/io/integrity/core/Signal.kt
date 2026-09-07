@@ -10,7 +10,24 @@ package io.integrity.core
  */
 public class Signal(
     public val id: SignalId,
-    public val category: Category,
+    /**
+     * The family this signal belongs to. **Defaults to the one [id] implies, and should be
+     * left to.**
+     *
+     * A signal's category is a fact about its id — `HOOK_UNEXPECTED_MODULE` is always
+     * `HOOKING` — and `docs/DETECTION_CATALOG.md` is organised by exactly that. It was a free
+     * parameter, which mattered once the backend started deriving it: `SubmittedReports`
+     * computes the category from the id rather than reading it off the wire, so a client that
+     * passed something else would make the two ends score one report differently. That is the
+     * [DexAggregate] failure mode — two implementations of one rule — reached by a different
+     * route.
+     *
+     * Passing it explicitly is still allowed, because an integrator feeding their own
+     * attestation verdict in may use an id from no family this build knows. Where the id *is*
+     * known, `tools/check-signal-catalog.py` fails the build if an explicit value contradicts
+     * it.
+     */
+    public val category: Category = SignalCategories.of(id) ?: Category.META,
     public val confidence: Confidence,
     public val evidence: Map<String, String> = emptyMap(),
     public val detectorVersion: Int = 1,

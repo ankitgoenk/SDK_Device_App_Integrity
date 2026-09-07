@@ -269,6 +269,7 @@ build:
       tools/check-unit-tests-ran.py
       io.integrity.core.RiskScorerTest
       io.integrity.core.PolicyTest
+      io.integrity.core.SignalCategoriesTest
       io.integrity.detector.environment.DeviceLockDetectorTest
       io.integrity.core.ReportWireTest
       io.integrity.core.IntegrityReportTest
