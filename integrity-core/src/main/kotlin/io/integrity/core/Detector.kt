@@ -16,6 +16,24 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 public interface Detector {
     public val id: String
+
+    /**
+     * The detector's own family, for grouping it in [IntegrityDiagnostics].
+     *
+     * **Not a claim that every signal it emits carries this category**, and reading it as one
+     * is the mistake this doc exists to prevent. Three shipped cases already differ, two of
+     * them by design: `RootManagerPackageDetector` is `ROOT` and emits
+     * `META_VISIBILITY_RESTRICTED` alongside its own finding, because those answer different
+     * questions; `NativeIntegrityDetector` is `META` and emits `APP_NATIVE_LIB_MISMATCH` as
+     * `APP_TAMPER`, because three of its four outcomes describe the SDK and the fourth
+     * describes the artifact; and [DetectionEngine] attributes `META_DETECTOR_TIMEOUT` and
+     * `META_DETECTOR_ERROR` to whichever detector produced them, whatever family it belongs to.
+     *
+     * Scoring never reads this. `RiskScorer` keys on [Signal.category], which defaults to the
+     * one the signal's id implies. This is a label for a human reading a diagnostics dump, and
+     * it is still needed for a detector that emitted nothing at all — a `SKIPPED_FOR_DEPTH`
+     * run has no signal to derive a family from.
+     */
     public val category: Category
 
     /** Evaluations shallower than this skip the detector. */

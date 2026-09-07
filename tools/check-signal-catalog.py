@@ -9,6 +9,7 @@ in production code this checks:
   3. that row states the technique and a known bypass        (Known bypass)
   4. at least one unit test references it by name            (Unit test)
   5. some `proposedWeights` helper offers it a weight        (Promotion path)
+  6. no construction contradicts the category its id implies (Client/server agreement)
 
 Expected result, evidence shape and "instrumented test where appropriate" stay with human
 review: a checker that guessed at those would only teach people how to satisfy the checker.
@@ -147,6 +148,53 @@ def producers() -> set[str]:
     return found
 
 
+SIGNAL_CTOR = re.compile(r"Signal\((.*?)\n\s*\)", re.S)
+CTOR_ID = re.compile(r"SignalId\.([A-Z][A-Z0-9_]+)")
+CTOR_CATEGORY = re.compile(r"category\s*=\s*Category\.(\w+)")
+
+# The family each id prefix belongs to. Mirrors `SignalCategories` in integrity-model, which is
+# the code both the client and the backend use; this is the gate's copy and it must agree.
+ID_PREFIX_CATEGORY = {
+    "ROOT": "ROOT", "HOOK": "HOOKING", "APP": "APP_TAMPER", "ENV": "ENVIRONMENT",
+    "EMU": "EMULATION", "VIRT": "EMULATION", "ATT": "ATTESTATION", "META": "META",
+    "SRV": "APP_TAMPER",
+}
+
+
+def category_conflicts() -> list[str]:
+    """Signal constructions passing a category the id contradicts.
+
+    Since `SubmittedReports` began deriving the category from the id, the two ends of the wire
+    compute it differently: the backend from the id, the client from whatever the detector
+    passed. Agreeing today is not the same as being unable to disagree -- and a disagreement
+    would have the client and the backend score one report differently, which is the failure
+    `DexAggregate` exists to prevent, reached by another route.
+
+    `Signal.category` now defaults to the derived value, so this only fires on an explicit
+    argument. An id from no known family is skipped: an integrator supplying their own
+    attestation verdict is a supported case, and there is nothing to contradict.
+    """
+    problems: list[str] = []
+    for path in ROOT.rglob("*.kt"):
+        text = str(path)
+        if "/build/" in text or "/src/main/" not in text:
+            continue
+        for match in SIGNAL_CTOR.finditer(path.read_text(encoding="utf-8")):
+            block = match.group(1)
+            signal, category = CTOR_ID.search(block), CTOR_CATEGORY.search(block)
+            if not (signal and category):
+                continue
+            implied = ID_PREFIX_CATEGORY.get(signal.group(1).split("_", 1)[0])
+            if implied and implied != category.group(1):
+                problems.append(
+                    f"{path.name}: {signal.group(1)} is constructed with "
+                    f"Category.{category.group(1)}, but its id implies {implied}. The backend "
+                    f"derives the category from the id, so the two ends would score this "
+                    f"report differently. Drop the argument and take the default."
+                )
+    return problems
+
+
 def proposed_weights() -> dict[str, str]:
     """Every id some module's `proposedWeights` helper offers a weight, and which weight.
 
@@ -238,6 +286,8 @@ def main() -> int:
                 f"{name}: default policy weights it {weight} but nothing emits it. "
                 f"Ship the weight with its detector, not before."
             )
+
+    problems += category_conflicts()
 
     if problems:
         print("FAIL: the detection evidence chain is incomplete.\n")
